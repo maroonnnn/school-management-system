@@ -45,7 +45,7 @@ router.get(
     const year = await currentYear();
     const r = await pool.query(
       `SELECT c.id AS class_id, c.name AS class_name, c.grade_level,
-              sc.id AS section_id, sc.name AS section_name, sc.capacity,
+              sc.id AS section_id, sc.name AS section_name, sc.capacity, sc.track,
               (SELECT COUNT(*) FROM student_enrollments se
                 WHERE se.section_id = sc.id AND se.status = 'ACTIVE')::int AS students_count
          FROM classes c LEFT JOIN sections sc ON sc.class_id = c.id
@@ -59,7 +59,7 @@ router.get(
       if (!classes.has(cid)) classes.set(cid, { id: cid, name: row.class_name, gradeLevel: row.grade_level, sections: [] });
       if (row.section_id) {
         classes.get(cid)!.sections.push({
-          id: Number(row.section_id), name: row.section_name, capacity: row.capacity, studentsCount: row.students_count,
+          id: Number(row.section_id), name: row.section_name, capacity: row.capacity, track: row.track, studentsCount: row.students_count,
         });
       }
     }
@@ -92,8 +92,8 @@ router.post(
     if (!own.rowCount) throw new HttpError(404, "الصف غير موجود في مدرستك");
     const capacity = req.body?.capacity ? Number(req.body.capacity) : null;
     const r = await pool.query(
-      "INSERT INTO sections (class_id, name, capacity) VALUES ($1, $2, $3) RETURNING id",
-      [classId, requireString(req.body?.name, "اسم الشعبة", 50), capacity]
+      "INSERT INTO sections (class_id, name, capacity, track) VALUES ($1, $2, $3, $4) RETURNING id",
+      [classId, requireString(req.body?.name, "اسم الشعبة", 50), capacity, optionalString(req.body?.track, 30)]
     );
     void audit({ userId: req.user!.id, action: "DATA_CREATE", entityType: "section", entityId: r.rows[0].id, req });
     res.status(201).json({ success: true, message: "تمت إضافة الشعبة", data: r.rows[0] });

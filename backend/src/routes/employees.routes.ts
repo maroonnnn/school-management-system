@@ -17,10 +17,13 @@ const SELECT = `
   SELECT e.id, e.employee_number, e.full_name, e.phone, e.email, e.hire_date, e.is_active,
          ea.id AS assignment_id, ea.school_id, ea.position_type, ea.weekly_quota_units,
          tp.specialization, tp.qualification, tp.years_of_experience,
+         tp.employment_type, tp.contract_weekly_hours, q.required_weekly_quota, q.years_of_service,
+         (SELECT COUNT(*) FROM employee_assignments x WHERE x.employee_id = e.id AND x.is_active)::int AS schools_count,
          u.username
     FROM employees e
     JOIN employee_assignments ea ON ea.employee_id = e.id AND ea.is_active
     LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
+    LEFT JOIN v_teacher_quota q ON q.employee_assignment_id = ea.id
     LEFT JOIN users u ON u.employee_id = e.id`;
 
 router.get(
@@ -36,6 +39,17 @@ router.get(
   })
 );
 
+function parseEmployment(position: string, body: Record<string, unknown>) {
+  if (position !== "TEACHER") return { employmentType: "PERMANENT" as const, contractWeeklyHours: null, hoursAtSchool: null };
+  const employmentType = body.employmentType === "CONTRACT" ? "CONTRACT" as const : "PERMANENT" as const;
+  if (employmentType === "PERMANENT") return { employmentType, contractWeeklyHours: null, hoursAtSchool: null };
+  const allot = Number(body.contractWeeklyHours);
+  const here = Number(body.hoursAtSchool ?? allot);
+  if (!(allot > 0 && allot <= 40)) throw new HttpError(400, "ساعات تكليف الوكيل الأسبوعية غير صالحة");
+  if (!(here > 0 && here <= allot)) throw new HttpError(400, "ساعات الوكيل في هذه المدرسة يجب أن تكون بين 1 وساعات تكليفه");
+  return { employmentType, contractWeeklyHours: allot, hoursAtSchool: here };
+}
+
 interface EmployeeInput {
   fullName: string;
   employeeNumber: string | null;
@@ -46,6 +60,9 @@ interface EmployeeInput {
   specialization: string | null;
   qualification: string | null;
   years: number;
+  employmentType: "PERMANENT" | "CONTRACT";
+  contractWeeklyHours: number | null; // total allotment from the directorate
+  hoursAtSchool: number | null;       // part of the allotment taught at this school
 }
 
 function parseBody(body: Record<string, unknown> = {}): EmployeeInput {
@@ -61,6 +78,7 @@ function parseBody(body: Record<string, unknown> = {}): EmployeeInput {
     hireDate: optionalDate(body.hireDate),
     position,
     specialization: optionalString(body.specialization, 150),
+    ...parseEmployment(position, body),
     qualification: optionalString(body.qualification, 200),
     years,
   };
@@ -84,12 +102,14 @@ async function findDuplicates(input: EmployeeInput, schoolId: number, excludeId?
 async function upsertTeacherProfile(client: PoolClient, employeeId: number, input: EmployeeInput) {
   if (input.position !== "TEACHER") return;
   await client.query(
-    `INSERT INTO teacher_profiles (employee_id, specialization, qualification, years_of_experience)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO teacher_profiles
+       (employee_id, specialization, qualification, years_of_experience, employment_type, contract_weekly_hours)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (employee_id) DO UPDATE
        SET specialization = EXCLUDED.specialization, qualification = EXCLUDED.qualification,
-           years_of_experience = EXCLUDED.years_of_experience`,
-    [employeeId, input.specialization, input.qualification, input.years]
+           years_of_experience = EXCLUDED.years_of_experience,
+           employment_type = EXCLUDED.employment_type, contract_weekly_hours = EXCLUDED.contract_weekly_hours`,
+    [employeeId, input.specialization, input.qualification, input.years, input.employmentType, input.contractWeeklyHours]
   );
 }
 
@@ -117,15 +137,17 @@ router.post(
         [input.employeeNumber, input.fullName, input.phone, input.email, input.hireDate]
       );
       const employeeId = Number(emp.rows[0].id);
+      // Profile first: the contract-hours DB check reads the allotment from it
+      await upsertTeacherProfile(client, employeeId, input);
+      // Permanent teachers: quota comes from years of service (v_teacher_quota). Contract: hours at this school.
       await client.query(
         `INSERT INTO employee_assignments
            (employee_id, school_id, position_type, work_schedule_type, weekly_quota_units, start_date)
          VALUES ($1, $2, $3, $4, $5, CURRENT_DATE)`,
         [employeeId, schoolId, input.position,
          input.position === "TEACHER" ? "TEACHING_TIMETABLE" : "FULL_DAY",
-         input.position === "TEACHER" ? 22 : null]
+         input.hoursAtSchool]
       );
-      await upsertTeacherProfile(client, employeeId, input);
       await client.query("COMMIT");
       void audit({ userId: req.user!.id, action: "DATA_CREATE", entityType: "employee", entityId: employeeId, req });
       res.status(201).json({ success: true, message: "تمت إضافة الموظف", data: emp.rows[0] });
@@ -165,6 +187,13 @@ router.put(
         [input.fullName, input.phone, input.email, input.hireDate, input.employeeNumber, id]
       );
       await upsertTeacherProfile(client, id, input);
+      if (input.position === "TEACHER") {
+        await client.query(
+          `UPDATE employee_assignments SET weekly_quota_units = $1
+            WHERE employee_id = $2 AND school_id = $3 AND is_active`,
+          [input.hoursAtSchool, id, schoolId]
+        );
+      }
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");

@@ -3,8 +3,9 @@ import { useApi } from "../hooks/useApi";
 import { ApiError, apiFetch } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Alert, DuplicateWarning, Field, Loading, PageHeader, SchoolPicker } from "../components/ui";
+import { TRACK_LABELS } from "../config/labels";
 
-interface Section { id: number; name: string; capacity: number | null; studentsCount: number }
+interface Section { id: number; name: string; capacity: number | null; track: string | null; studentsCount: number }
 interface SchoolClass { id: number; name: string; gradeLevel: number; sections: Section[] }
 interface Structure { academicYear: { id: number; name: string }; classes: SchoolClass[] }
 interface Student {
@@ -32,7 +33,8 @@ function StudentsPage() {
   const [editingStudentId, setEditingStudentId] = useState<number | null>(null);
   const [duplicates, setDuplicates] = useState<Student[] | null>(null);
   const [classForm, setClassForm] = useState({ name: "", gradeLevel: "7" });
-  const [sectionForm, setSectionForm] = useState({ classId: "", name: "", capacity: "30" });
+  const [sectionForm, setSectionForm] = useState({ classId: "", name: "", capacity: "30", track: "" });
+  const selectedClassGrade = structure.data?.classes.find((c) => String(c.id) === sectionForm.classId)?.gradeLevel ?? 0;
 
   const selectedSection = structure.data?.classes.flatMap((c) => c.sections.map((s) => ({ ...s, className: c.name })))
     .find((s) => s.id === sectionId);
@@ -64,7 +66,7 @@ function StudentsPage() {
     e.preventDefault();
     try {
       if (panel === "class") await send("/academics/classes", "POST", { ...classForm, gradeLevel: Number(classForm.gradeLevel) });
-      else await send("/academics/sections", "POST", { ...sectionForm, classId: Number(sectionForm.classId), capacity: Number(sectionForm.capacity) || null });
+      else await send("/academics/sections", "POST", { ...sectionForm, classId: Number(sectionForm.classId), capacity: Number(sectionForm.capacity) || null, track: sectionForm.track || null });
       structure.reload();
     } catch (err) {
       setMsg({ ok: "", err: (err as Error).message });
@@ -117,6 +119,14 @@ function StudentsPage() {
                 </Field>
                 <Field label="اسم الشعبة *" col="col-md-3"><input className="form-control" value={sectionForm.name} onChange={(e) => setSectionForm({ ...sectionForm, name: e.target.value })} required /></Field>
                 <Field label="السعة" col="col-md-2"><input type="number" min={1} className="form-control" value={sectionForm.capacity} onChange={(e) => setSectionForm({ ...sectionForm, capacity: e.target.value })} /></Field>
+                {selectedClassGrade >= 10 && (
+                  <Field label="الفرع *" col="col-md-3">
+                    <select className="form-select" value={sectionForm.track} onChange={(e) => setSectionForm({ ...sectionForm, track: e.target.value })} required>
+                      <option value="">اختر...</option>
+                      {Object.entries(TRACK_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </Field>
+                )}
               </>
             )}
             <div className="col-md-3 d-flex gap-2"><button className="btn btn-primary">حفظ</button><button type="button" className="btn btn-outline-secondary" onClick={() => setPanel("")}>إلغاء</button></div>
@@ -137,7 +147,7 @@ function StudentsPage() {
                     <button key={s.id} type="button"
                       className={`sidebar-link w-100 border-0 justify-content-between ${s.id === sectionId ? "active" : "bg-transparent"}`}
                       onClick={() => { setSectionId(s.id); setPanel(""); }}>
-                      <span>شعبة {s.name}</span>
+                      <span>شعبة {s.name}{s.track && <small className="opacity-75"> · {TRACK_LABELS[s.track]}</small>}</span>
                       <span className={`badge ${s.id === sectionId ? "text-bg-light" : "text-bg-secondary"}`}>{s.studentsCount}</span>
                     </button>
                   ))}
@@ -157,7 +167,7 @@ function StudentsPage() {
               ) : (
                 <>
                   <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h2 className="h6 fw-bold mb-0">{selectedSection.className} — شعبة {selectedSection.name}
+                    <h2 className="h6 fw-bold mb-0">{selectedSection.className} — شعبة {selectedSection.name}{selectedSection.track && ` (${TRACK_LABELS[selectedSection.track]})`}
                       <span className="text-secondary fw-normal"> ({selectedSection.studentsCount}{selectedSection.capacity ? ` / ${selectedSection.capacity}` : ""})</span>
                     </h2>
                     {canEdit && (

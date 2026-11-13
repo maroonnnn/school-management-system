@@ -23,6 +23,10 @@ export function handle<R extends Request>(
         return res.status(e.status).json({ success: false, message: e.message, ...e.extra });
       }
       const pgCode = (error as { code?: string })?.code;
+      // RAISE EXCEPTION from our DB triggers carries a user-facing Arabic message
+      if (pgCode === "P0001") {
+        return res.status(400).json({ success: false, message: (error as Error).message });
+      }
       if (pgCode === "23505") {
         return res.status(409).json({ success: false, message: "القيمة مستخدمة مسبقاً (رقم أو اسم مكرر)" });
       }

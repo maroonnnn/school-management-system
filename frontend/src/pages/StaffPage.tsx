@@ -3,6 +3,7 @@ import { useApi } from "../hooks/useApi";
 import { ApiError, apiFetch } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Alert, DuplicateWarning, Field, Loading, PageHeader, SchoolPicker } from "../components/ui";
+import { EMPLOYMENT_LABELS } from "../config/labels";
 
 interface Employee {
   id: number;
@@ -16,6 +17,11 @@ interface Employee {
   specialization: string | null;
   qualification: string | null;
   years_of_experience: number | null;
+  employment_type: "PERMANENT" | "CONTRACT" | null;
+  contract_weekly_hours: string | null;
+  required_weekly_quota: string | null;
+  years_of_service: number | null;
+  schools_count: number;
   username: string | null;
 }
 
@@ -26,6 +32,7 @@ const POSITION_LABELS: Record<string, string> = {
 const empty = {
   fullName: "", employeeNumber: "", phone: "", email: "", hireDate: "", position: "TEACHER",
   specialization: "", qualification: "", yearsOfExperience: "0",
+  employmentType: "PERMANENT", contractWeeklyHours: "", hoursAtSchool: "",
 };
 
 // FR-DATA-02 (teachers), FR-DATA-03 (admin staff — principal only), FR-DATA-06, FR-DATA-11 (directorate read-only)
@@ -50,6 +57,9 @@ function StaffPage() {
       hireDate: emp.hire_date?.slice(0, 10) ?? "", position: emp.position_type,
       specialization: emp.specialization ?? "", qualification: emp.qualification ?? "",
       yearsOfExperience: String(emp.years_of_experience ?? 0),
+      employmentType: emp.employment_type ?? "PERMANENT",
+      contractWeeklyHours: emp.contract_weekly_hours ? String(Number(emp.contract_weekly_hours)) : "",
+      hoursAtSchool: emp.employment_type === "CONTRACT" && emp.weekly_quota_units ? String(Number(emp.weekly_quota_units)) : "",
     });
     setEditingId(emp.id);
     setShowForm(true);
@@ -61,7 +71,11 @@ function StaffPage() {
     try {
       const r = await apiFetch<{ message: string }>(editingId ? `/employees/${editingId}` : "/employees", {
         method: editingId ? "PUT" : "POST",
-        body: JSON.stringify({ ...form, yearsOfExperience: Number(form.yearsOfExperience), confirmDuplicate }),
+        body: JSON.stringify({
+          ...form, yearsOfExperience: Number(form.yearsOfExperience), confirmDuplicate,
+          contractWeeklyHours: Number(form.contractWeeklyHours) || null,
+          hoursAtSchool: Number(form.hoursAtSchool || form.contractWeeklyHours) || null,
+        }),
       });
       setMsg({ ok: r.message, err: "" });
       setShowForm(false);
@@ -121,6 +135,22 @@ function StaffPage() {
                 <Field label="التخصص" col="col-md-3"><input className="form-control" value={form.specialization} onChange={set("specialization")} /></Field>
                 <Field label="المؤهل العلمي" col="col-md-4"><input className="form-control" value={form.qualification} onChange={set("qualification")} /></Field>
                 <Field label="سنوات الخبرة" col="col-md-2"><input type="number" min={0} max={60} className="form-control" value={form.yearsOfExperience} onChange={set("yearsOfExperience")} /></Field>
+                <Field label="نوع التعيين *" col="col-md-3">
+                  <select className="form-select" value={form.employmentType} onChange={set("employmentType")}>
+                    <option value="PERMANENT">مثبّت — النصاب حسب سنين الخدمة</option>
+                    <option value="CONTRACT">وكيل — ساعات تكليف</option>
+                  </select>
+                </Field>
+                {form.employmentType === "CONTRACT" && (
+                  <>
+                    <Field label="ساعات التكليف الأسبوعية (كل المدارس) *" col="col-md-3">
+                      <input type="number" min={1} max={40} className="form-control" value={form.contractWeeklyHours} onChange={set("contractWeeklyHours")} required />
+                    </Field>
+                    <Field label="منها في هذه المدرسة" col="col-md-3">
+                      <input type="number" min={1} max={40} className="form-control" value={form.hoursAtSchool} onChange={set("hoursAtSchool")} placeholder="كلها" />
+                    </Field>
+                  </>
+                )}
               </>
             )}
             {duplicates && (
@@ -150,7 +180,7 @@ function StaffPage() {
           <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
               <thead className="table-light">
-                <tr><th>الرقم</th><th>الاسم</th><th>الوظيفة</th><th>التخصص</th><th>النصاب</th><th>الهاتف</th><th>الحساب</th>{canEdit && <th></th>}</tr>
+                <tr><th>الرقم</th><th>الاسم</th><th>الوظيفة</th><th>التعيين</th><th>التخصص</th><th>النصاب المطلوب</th><th>الهاتف</th><th>الحساب</th>{canEdit && <th></th>}</tr>
               </thead>
               <tbody>
                 {rows.map((e) => (
@@ -158,8 +188,17 @@ function StaffPage() {
                     <td className="text-secondary small">{e.employee_number}</td>
                     <td className="fw-semibold">{e.full_name}</td>
                     <td>{POSITION_LABELS[e.position_type]}</td>
+                    <td>
+                      {e.employment_type ? (
+                        <span className={`badge ${e.employment_type === "CONTRACT" ? "text-bg-info" : "text-bg-light border"}`}>
+                          {EMPLOYMENT_LABELS[e.employment_type]}{e.schools_count > 1 && ` · ${e.schools_count} مدارس`}
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td>{e.specialization ?? "—"}</td>
-                    <td>{e.weekly_quota_units ? Number(e.weekly_quota_units) : "—"}</td>
+                    <td title={e.employment_type === "PERMANENT" ? `${e.years_of_service} سنة خدمة` : e.contract_weekly_hours ? `تكليف كلي ${Number(e.contract_weekly_hours)} ساعة` : ""}>
+                      {e.required_weekly_quota ? Number(e.required_weekly_quota) : "—"}
+                    </td>
                     <td dir="ltr" className="text-end">{e.phone}</td>
                     <td>{e.username ? <span className="badge text-bg-light border">{e.username}</span> : <span className="text-secondary small">لا يوجد</span>}</td>
                     {canEdit && (
@@ -167,7 +206,7 @@ function StaffPage() {
                     )}
                   </tr>
                 ))}
-                {rows.length === 0 && <tr><td colSpan={8} className="text-center text-secondary py-4">لا توجد نتائج</td></tr>}
+                {rows.length === 0 && <tr><td colSpan={9} className="text-center text-secondary py-4">لا توجد نتائج</td></tr>}
               </tbody>
             </table>
           </div>

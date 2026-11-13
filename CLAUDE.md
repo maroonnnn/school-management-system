@@ -18,7 +18,7 @@
 
 ## بنية الكود (مختصر)
 - `backend/src/app.ts` — تسجيل المسارات: `/api/auth`, `/api/reports`, `/api/requests`, `/api/health`
-- `backend/src/utils/http.ts` — `handle()` يلف الـ handlers (HttpError → status، تكرار pg → 409)، و`requireString/requireId/optionalDate`. **استخدمه بكل route جديد.**
+- `backend/src/utils/http.ts` — `handle()` يلف الـ handlers (HttpError → status، تكرار pg → 409، `RAISE EXCEPTION` من triggers (P0001) → 400 بنفس الرسالة العربية)، و`requireString/requireId/optionalDate`. **استخدمه بكل route جديد.**
 - `scope.service.ts`: `readableSchoolIds(user)` و`resolveReadableSchool(user, ?schoolId)` للقراءة حسب النطاق.
 - `backend/src/routes/*` → `services/*` (منطق + SQL). كل route محمي: `authenticateToken` ثم `requireRole(...)`، وبيانات الأشخاص تمر عبر `scope.service.ts`، والاطلاع/التعديل يُسجّل بـ `audit()`.
 - JWT فيه: id, role, employeeId, schoolId, directorateId. والـ login يرجّع كمان employeeNumber.
@@ -35,7 +35,7 @@
 - التشغيل: `.claude/launch.json` فيه backend (5000) و frontend (5173).
 - Git: repo خاص بالمشروع، فرع `main`. `.env` غير مرفوع (انظر `backend/.env.example`).
 - قاعدة البيانات: الـ schema الكامل في `database/schema.sql` (مُصدَّر بـ pg_dump من القاعدة الحقيقية). 24 جدول: ministries, directorates, schools, roles, users, employees, employee_assignments, teacher_profiles, students, student_enrollments, academic_years, grades, classes, sections, subjects, teaching_assignments, timetables, timetable_periods, attendance_events (+ trigger `validate_attendance_sequence`), assessments, school_requests, request_status_history, request_attachments, school_deputy_authorizations.
-- البيانات الحالية قليلة جداً (مستخدمَين + مدرسة واحدة) → نحتاج seed.
+- إعدادات النظام بجدول `settings` (key/jsonb): permanent_quota_rules، contract_lesson_rate، lesson_duration_minutes، late_tolerance_minutes. اقرأها من القاعدة، لا تكتب القيم بالكود.
 - أدوات PostgreSQL: `C:/Program Files/PostgreSQL/18/bin/` (pg_dump, psql) — غير موجودة بالـ PATH.
 - إذا تغيّر الـ schema: عدّل بملف migration بـ `database/migrations/` وأعد تصدير schema.sql.
 
@@ -81,7 +81,10 @@
 **أين تدخل بالخطة:** 3 و1 (الجزء الخاص بالبيانات) ببداية الأسبوع 2 قبل SCH لأن النصاب يعتمد عليها؛ 2 مع وحدة الطلبات (أسبوع 3)؛ 4 بالأسبوع 4 مع التشطيب (أو أبكر إذا في وقت).
 
 ### الأسبوع 2 (11-20 → 11-26): الجداول + الحضور
-- [ ] أنواع المدارس (حلقة + فرع) + نوع تعيين المعلم (مثبّت/وكيل) + نصاب حسب الخبرة + الوكيل بأكتر من مدرسة — migration + seed + صفحات المدارس والكادر
+- [x] migration 004: `schools.stage` (1/2/3، بدل school_type المحذوف)، `sections.track` (GENERAL_SCIENTIFIC/GENERAL_LITERARY/COMMERCIAL/INDUSTRIAL — للحلقة 3 فقط)، `teacher_profiles.employment_type` (PERMANENT/CONTRACT) + `contract_weekly_hours`، جدول `settings`، دوال `years_of_service()` و`permanent_quota()`، view **`v_teacher_quota`** (النصاب المطلوب لكل تكليف: المثبّت من سنين الخدمة، الوكيل = ساعاته بهالمدرسة). القواعد مفروضة بـ triggers: الصف لازم يطابق حلقة المدرسة، الفرع إلزامي للحلقة 3 وممنوع لغيرها، مجموع ساعات الوكيل بكل المدارس ≤ تكليفه، تكليف فعّال واحد لكل موظف بكل مدرسة.
+- [x] seed: مدارس 1–4 حلقة ثانية، مدرسة 5 "ثانوية الفيحاء" حلقة ثالثة (أ علمي، ب أدبي). 63 معلم: 71% مثبّت / 29% وكيل. وكيلين مشتركين: EMP-1014 (فرنسي، مدرسة 1+2) و EMP-1052 (معلوماتية، 3+4). البرنامج بدون تعارض حتى عبر المدارس.
+- [x] الواجهة: الحلقة بصفحة المدارس، الفرع بالشعب (يظهر للصف ≥10)، نوع التعيين والنصاب المطلوب بصفحة الكادر. التسميات العربية بـ `frontend/src/config/labels.ts`.
+- [ ] تكليف معلم وكيل موجود بمدرسة تانية من الواجهة (حالياً بس عبر seed/SQL) — يُعمل مع المديرية
 - [ ] SCH-01, 04..11: جدول الحصص، النصاب (حسب نوع التعيين، مش 22 ثابت)، الإجازات، عرض جدول المعلم
 - [ ] ATT: أحداث خام غير قابلة للتعديل (06, 07, 08)، تصنيف يومي (09, 10, ALG-01)، التصحيحات واعتمادها (12, 13)، إدخال يدوي بديل (14)، انقطاع الكهرباء (18, 19)
 - [ ] ATT-25..27: ترحيل الأحداث إلى ملف Excel
@@ -144,3 +147,4 @@
 - 2026-11-13: DATA-07 (النتائج) خلص. أعيد بناء school_pilot (schema + 003 + seed جديد فيه 5 موجّهين و10 اختبارات). إصلاح: التواريخ كانت تطلع يوم قبل. مُختبر: 18 حالة API + المتصفح كـ supervisor1. **الأسبوع 1 خلص بالكامل.** التالي: SCH-01, 04..11.
 - 2026-11-13: المستخدم أضاف 4 متطلبات جديدة (مثبّت/وكيل، طلب إنشاء حساب المعلم عبر المديرية، أنواع المدارس حلقة/فرع، landing page). أُضيفت للخطة + أسئلة مفتوحة. التالي: جواب الأسئلة ثم أنواع المدارس والتعيين قبل SCH.
 - 2026-11-13: المستخدم جاوب الأسئلة (انظر "أجوبة المستخدم"). التالي: migration 004 (حلقة المدرسة، فرع الشعبة، نوع التعيين، ساعات تكليف الوكيل، إعدادات النصاب) + seed 70/30.
+- 2026-11-13: migration 004 خلص + seed جديد + واجهة. أعيد بناء school_pilot. مُختبر: 7 قواعد بالقاعدة + 13 حالة API + المتصفح (principal1 /staff). ⚠️ أرقام معلمي مدرسة 1 ما تغيّرت (t1006..)، بس مدارس 2+ تزحزحت لأن مدرسة 2 ما إلها معلم فرنسي خاص. التالي: SCH-01, 04..11 (استخدم `v_teacher_quota` للنصاب).

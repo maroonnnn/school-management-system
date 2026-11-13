@@ -3,6 +3,7 @@ import { useApi } from "../hooks/useApi";
 import { apiFetch } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Alert, Field, Loading, PageHeader } from "../components/ui";
+import { STAGE_LABELS } from "../config/labels";
 
 interface School {
   id: number;
@@ -10,7 +11,7 @@ interface School {
   school_code: string | null;
   address: string | null;
   phone: string | null;
-  school_type: string | null;
+  stage: number;
   is_active: boolean;
   directorate_id: number;
   directorate_name: string;
@@ -18,7 +19,7 @@ interface School {
   students_count: number;
 }
 
-const empty = { name: "", schoolCode: "", address: "", phone: "", schoolType: "", directorateId: "", isActive: true };
+const empty = { name: "", schoolCode: "", address: "", phone: "", stage: "", directorateId: "", isActive: true };
 
 // FR-DATA-01
 function SchoolsPage() {
@@ -35,7 +36,7 @@ function SchoolsPage() {
   function startEdit(s: School) {
     setForm({
       name: s.name, schoolCode: s.school_code ?? "", address: s.address ?? "", phone: s.phone ?? "",
-      schoolType: s.school_type ?? "", directorateId: String(s.directorate_id), isActive: s.is_active,
+      stage: String(s.stage), directorateId: String(s.directorate_id), isActive: s.is_active,
     });
     setEditingId(s.id);
     setShowForm(true);
@@ -46,7 +47,7 @@ function SchoolsPage() {
     setSaving(true);
     setMsg({ ok: "", err: "" });
     try {
-      const body = JSON.stringify({ ...form, directorateId: form.directorateId ? Number(form.directorateId) : undefined });
+      const body = JSON.stringify({ ...form, stage: Number(form.stage), directorateId: form.directorateId ? Number(form.directorateId) : undefined });
       const r = await apiFetch<{ message: string }>(editingId ? `/schools/${editingId}` : "/schools", {
         method: editingId ? "PUT" : "POST",
         body,
@@ -87,12 +88,10 @@ function SchoolsPage() {
             <Field label="رمز المدرسة" col="col-md-3"><input className="form-control" value={form.schoolCode} onChange={set("schoolCode")} /></Field>
             <Field label="الهاتف" col="col-md-3"><input className="form-control" value={form.phone} onChange={set("phone")} /></Field>
             <Field label="العنوان"><input className="form-control" value={form.address} onChange={set("address")} /></Field>
-            <Field label="نوع المدرسة" col="col-md-3">
-              <select className="form-select" value={form.schoolType} onChange={set("schoolType")}>
-                <option value="">—</option>
-                <option value="PRIMARY">ابتدائية</option>
-                <option value="PREPARATORY">إعدادية</option>
-                <option value="SECONDARY">ثانوية</option>
+            <Field label="الحلقة *" col="col-md-3">
+              <select className="form-select" value={form.stage} onChange={set("stage")} required>
+                <option value="">اختر...</option>
+                {Object.entries(STAGE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </Field>
             {isMinistry && (
@@ -123,13 +122,14 @@ function SchoolsPage() {
           <div className="table-responsive">
             <table className="table table-hover align-middle mb-0">
               <thead className="table-light">
-                <tr><th>المدرسة</th><th>الرمز</th><th>المديرية</th><th>الموظفون</th><th>الطلاب</th><th>الحالة</th><th></th></tr>
+                <tr><th>المدرسة</th><th>الرمز</th><th>الحلقة</th><th>المديرية</th><th>الموظفون</th><th>الطلاب</th><th>الحالة</th><th></th></tr>
               </thead>
               <tbody>
                 {data?.map((s) => (
                   <tr key={s.id}>
                     <td className="fw-semibold">{s.name}<div className="small text-secondary">{s.address}</div></td>
                     <td>{s.school_code}</td>
+                    <td>{STAGE_LABELS[s.stage]}</td>
                     <td>{s.directorate_name}</td>
                     <td>{s.employees_count}</td>
                     <td>{s.students_count}</td>

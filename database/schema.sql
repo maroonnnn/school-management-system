@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9Fyc0zRBwdyfVTckfCKddkHQvBcgIA2WNkh7iMnORl2bYzCMmI63ydHai8S0Bfe
+\restrict mmmNd3ubL5C0ogRKZGpm0KNJAeObQne2aY9shxAgEWDIjs1gAl2fnaliYa2WJY6
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -20,21 +20,36 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: permanent_quota(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.permanent_quota(p_years integer) RETURNS integer
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT (r->>'quota')::int
+      FROM settings, jsonb_array_elements(value) r
+     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
+     ORDER BY (r->>'minYears')::int DESC
+     LIMIT 1
+$$;
+
+
+--
 -- Name: prevent_approved_grade_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.prevent_approved_grade_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_status varchar(20);
-BEGIN
-    SELECT status INTO v_status FROM assessments
-     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
-    IF v_status = 'APPROVED' THEN
-        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
+    AS $$
+DECLARE v_status varchar(20);
+BEGIN
+    SELECT status INTO v_status FROM assessments
+     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
+    IF v_status = 'APPROVED' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
 $$;
 
 
@@ -44,10 +59,23 @@ $$;
 
 CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
+$$;
+
+
+--
+-- Name: stage_allows_grade(smallint, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.stage_allows_grade(p_stage smallint, p_grade integer) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
+                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
+                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
 $$;
 
 
@@ -57,45 +85,139 @@ $$;
 
 CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE
-    v_last_event_type VARCHAR(10);
-    v_last_event_time TIMESTAMPTZ;
-BEGIN
-    -- منع إدخال حركتين متزامنتين لنفس الموظف
-    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
-
-    -- جلب آخر حركة مسجلة للموظف
-    SELECT event_type, event_time
-    INTO v_last_event_type, v_last_event_time
-    FROM attendance_events
-    WHERE employee_assignment_id = NEW.employee_assignment_id
-    ORDER BY event_time DESC, id DESC
-    LIMIT 1;
-
-    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
-    IF NOT FOUND THEN
-        IF NEW.event_type <> 'IN' THEN
-            RAISE EXCEPTION
-                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
-        END IF;
-
-    ELSE
-        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
-        IF NEW.event_time <= v_last_event_time THEN
-            RAISE EXCEPTION
-                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
-        END IF;
-
-        -- منع تكرار نوع الحركة
-        IF NEW.event_type = v_last_event_type THEN
-            RAISE EXCEPTION
-                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
+    AS $$
+DECLARE
+    v_last_event_type VARCHAR(10);
+    v_last_event_time TIMESTAMPTZ;
+BEGIN
+    -- منع إدخال حركتين متزامنتين لنفس الموظف
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+
+    -- جلب آخر حركة مسجلة للموظف
+    SELECT event_type, event_time
+    INTO v_last_event_type, v_last_event_time
+    FROM attendance_events
+    WHERE employee_assignment_id = NEW.employee_assignment_id
+    ORDER BY event_time DESC, id DESC
+    LIMIT 1;
+
+    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
+    IF NOT FOUND THEN
+        IF NEW.event_type <> 'IN' THEN
+            RAISE EXCEPTION
+                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
+        END IF;
+
+    ELSE
+        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
+        IF NEW.event_time <= v_last_event_time THEN
+            RAISE EXCEPTION
+                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
+        END IF;
+
+        -- منع تكرار نوع الحركة
+        IF NEW.event_type = v_last_event_type THEN
+            RAISE EXCEPTION
+                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_class_grade_stage(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_class_grade_stage() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
+    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
+        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_contract_hours(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_contract_hours() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
+BEGIN
+    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
+    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
+      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
+    IF v_type = 'CONTRACT' THEN
+        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
+          FROM employee_assignments
+         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
+        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
+            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
+                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_school_stage_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_school_stage_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
+                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
+        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_section_track(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_section_track() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
+    IF v_stage = 3 AND NEW.track IS NULL THEN
+        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
+    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
+        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: years_of_service(bigint, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.years_of_service(p_employee_id bigint, p_on date DEFAULT CURRENT_DATE) RETURNS integer
+    LANGUAGE sql STABLE
+    AS $$
+    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
+      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
+     WHERE e.id = p_employee_id
 $$;
 
 
@@ -152,7 +274,7 @@ CREATE TABLE public.assessments (
     return_note text,
     CONSTRAINT chk_assessment_approval CHECK ((((status)::text <> 'APPROVED'::text) OR ((approved_by IS NOT NULL) AND (approved_at IS NOT NULL)))),
     CONSTRAINT chk_assessment_max_score CHECK ((max_score > (0)::numeric)),
-    CONSTRAINT chk_assessment_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'APPROVED'::character varying])::text[])))
+    CONSTRAINT chk_assessment_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('APPROVED'::character varying)::text])))
 );
 
 
@@ -585,9 +707,10 @@ CREATE TABLE public.schools (
     school_code character varying(50),
     address text,
     phone character varying(30),
-    school_type character varying(50),
     is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    stage smallint NOT NULL,
+    CONSTRAINT chk_school_stage CHECK ((stage = ANY (ARRAY[1, 2, 3])))
 );
 
 
@@ -615,7 +738,9 @@ CREATE TABLE public.sections (
     name character varying(50) NOT NULL,
     capacity integer,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT chk_section_capacity CHECK (((capacity IS NULL) OR (capacity > 0)))
+    track character varying(30),
+    CONSTRAINT chk_section_capacity CHECK (((capacity IS NULL) OR (capacity > 0))),
+    CONSTRAINT chk_section_track CHECK (((track IS NULL) OR ((track)::text = ANY ((ARRAY['GENERAL_SCIENTIFIC'::character varying, 'GENERAL_LITERARY'::character varying, 'COMMERCIAL'::character varying, 'INDUSTRIAL'::character varying])::text[]))))
 );
 
 
@@ -630,6 +755,19 @@ ALTER TABLE public.sections ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     NO MINVALUE
     NO MAXVALUE
     CACHE 1
+);
+
+
+--
+-- Name: settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.settings (
+    key character varying(60) NOT NULL,
+    value jsonb NOT NULL,
+    description text,
+    updated_by bigint,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -732,6 +870,10 @@ CREATE TABLE public.teacher_profiles (
     qualification character varying(200),
     years_of_experience integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    employment_type character varying(20) DEFAULT 'PERMANENT'::character varying NOT NULL,
+    contract_weekly_hours numeric(6,2),
+    CONSTRAINT chk_contract_hours CHECK (((((employment_type)::text = 'CONTRACT'::text) AND (contract_weekly_hours > (0)::numeric)) OR (((employment_type)::text = 'PERMANENT'::text) AND (contract_weekly_hours IS NULL)))),
+    CONSTRAINT chk_employment_type CHECK (((employment_type)::text = ANY ((ARRAY['PERMANENT'::character varying, 'CONTRACT'::character varying])::text[]))),
     CONSTRAINT chk_teacher_experience CHECK ((years_of_experience >= 0))
 );
 
@@ -869,6 +1011,26 @@ ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: v_teacher_quota; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.v_teacher_quota AS
+ SELECT ea.id AS employee_assignment_id,
+    ea.employee_id,
+    ea.school_id,
+    tp.employment_type,
+    public.years_of_service(ea.employee_id) AS years_of_service,
+        CASE
+            WHEN ((tp.employment_type)::text = 'CONTRACT'::text) THEN ea.weekly_quota_units
+            ELSE (public.permanent_quota(public.years_of_service(ea.employee_id)))::numeric
+        END AS required_weekly_quota,
+    tp.contract_weekly_hours
+   FROM (public.employee_assignments ea
+     JOIN public.teacher_profiles tp ON ((tp.employee_id = ea.employee_id)))
+  WHERE (ea.is_active AND ((ea.position_type)::text = 'TEACHER'::text));
 
 
 --
@@ -1045,6 +1207,14 @@ ALTER TABLE ONLY public.schools
 
 ALTER TABLE ONLY public.sections
     ADD CONSTRAINT sections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: settings settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.settings
+    ADD CONSTRAINT settings_pkey PRIMARY KEY (key);
 
 
 --
@@ -1370,6 +1540,13 @@ CREATE INDEX idx_timetable_section ON public.timetables USING btree (section_id)
 
 
 --
+-- Name: uq_active_assignment_per_school; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_active_assignment_per_school ON public.employee_assignments USING btree (employee_id, school_id) WHERE (is_active AND (school_id IS NOT NULL));
+
+
+--
 -- Name: uq_active_school_deputy; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1384,10 +1561,38 @@ CREATE TRIGGER trg_audit_logs_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON p
 
 
 --
+-- Name: classes trg_class_grade_stage; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_class_grade_stage BEFORE INSERT OR UPDATE OF grade_level, school_id ON public.classes FOR EACH ROW EXECUTE FUNCTION public.validate_class_grade_stage();
+
+
+--
+-- Name: employee_assignments trg_contract_hours; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_contract_hours BEFORE INSERT OR UPDATE ON public.employee_assignments FOR EACH ROW EXECUTE FUNCTION public.validate_contract_hours();
+
+
+--
 -- Name: grades trg_grades_frozen_after_approval; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_grades_frozen_after_approval BEFORE INSERT OR DELETE OR UPDATE ON public.grades FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_grade_change();
+
+
+--
+-- Name: schools trg_school_stage_change; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_school_stage_change BEFORE UPDATE OF stage ON public.schools FOR EACH ROW EXECUTE FUNCTION public.validate_school_stage_change();
+
+
+--
+-- Name: sections trg_section_track; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_section_track BEFORE INSERT OR UPDATE OF track, class_id ON public.sections FOR EACH ROW EXECUTE FUNCTION public.validate_section_track();
 
 
 --
@@ -1694,6 +1899,14 @@ ALTER TABLE ONLY public.school_requests
 
 
 --
+-- Name: settings settings_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.settings
+    ADD CONSTRAINT settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+
+
+--
 -- Name: users users_directorate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1729,5 +1942,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9Fyc0zRBwdyfVTckfCKddkHQvBcgIA2WNkh7iMnORl2bYzCMmI63ydHai8S0Bfe
+\unrestrict mmmNd3ubL5C0ogRKZGpm0KNJAeObQne2aY9shxAgEWDIjs1gAl2fnaliYa2WJY6
 

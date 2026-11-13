@@ -10,7 +10,7 @@ const router = Router();
 router.use(authenticateToken);
 
 const SELECT = `
-  SELECT s.id, s.name, s.school_code, s.address, s.phone, s.school_type, s.is_active,
+  SELECT s.id, s.name, s.school_code, s.address, s.phone, s.stage, s.is_active,
          s.directorate_id, d.name AS directorate_name,
          (SELECT COUNT(*) FROM employee_assignments ea WHERE ea.school_id = s.id AND ea.is_active)::int AS employees_count,
          (SELECT COUNT(*) FROM student_enrollments se JOIN sections sc ON sc.id = se.section_id
@@ -47,6 +47,13 @@ function targetDirectorate(req: AuthRequest): number {
   return requireId(req.body?.directorateId, "المديرية");
 }
 
+/** حلقة: 1 = صف 1-6، 2 = صف 7-9، 3 = صف 10-12 */
+function requireStage(value: unknown): number {
+  const stage = Number(value);
+  if (![1, 2, 3].includes(stage)) throw new HttpError(400, "يرجى اختيار حلقة المدرسة");
+  return stage;
+}
+
 function schoolBody(req: AuthRequest) {
   const b = req.body ?? {};
   return [
@@ -54,7 +61,7 @@ function schoolBody(req: AuthRequest) {
     optionalString(b.schoolCode, 50),
     optionalString(b.address),
     optionalString(b.phone, 30),
-    optionalString(b.schoolType, 50),
+    requireStage(b.stage),
   ];
 }
 
@@ -64,7 +71,7 @@ router.post(
   handle<AuthRequest>(async (req, res) => {
     const directorateId = targetDirectorate(req);
     const result = await pool.query(
-      `INSERT INTO schools (name, school_code, address, phone, school_type, directorate_id)
+      `INSERT INTO schools (name, school_code, address, phone, stage, directorate_id)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [...schoolBody(req), directorateId]
     );
@@ -84,7 +91,7 @@ router.put(
     const directorateId = targetDirectorate(req);
     const isActive = req.body?.isActive !== false;
     const result = await pool.query(
-      `UPDATE schools SET name=$1, school_code=$2, address=$3, phone=$4, school_type=$5,
+      `UPDATE schools SET name=$1, school_code=$2, address=$3, phone=$4, stage=$5,
               directorate_id=$6, is_active=$7 WHERE id=$8`,
       [...schoolBody(req), directorateId, isActive, id]
     );
