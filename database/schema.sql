@@ -1,0 +1,1603 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict 3to6zwhXBPrkMU5EAbSJBKkc5neuanSPyk0o4d8JS5vtOqFayYkaSOkhteiC5tp
+
+-- Dumped from database version 18.6
+-- Dumped by pg_dump version 18.6
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: validate_attendance_sequence(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    v_last_event_type VARCHAR(10);
+    v_last_event_time TIMESTAMPTZ;
+BEGIN
+    -- منع إدخال حركتين متزامنتين لنفس الموظف
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+
+    -- جلب آخر حركة مسجلة للموظف
+    SELECT event_type, event_time
+    INTO v_last_event_type, v_last_event_time
+    FROM attendance_events
+    WHERE employee_assignment_id = NEW.employee_assignment_id
+    ORDER BY event_time DESC, id DESC
+    LIMIT 1;
+
+    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
+    IF NOT FOUND THEN
+        IF NEW.event_type <> 'IN' THEN
+            RAISE EXCEPTION
+                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
+        END IF;
+
+    ELSE
+        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
+        IF NEW.event_time <= v_last_event_time THEN
+            RAISE EXCEPTION
+                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
+        END IF;
+
+        -- منع تكرار نوع الحركة
+        IF NEW.event_type = v_last_event_type THEN
+            RAISE EXCEPTION
+                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: academic_years; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.academic_years (
+    id bigint NOT NULL,
+    name character varying(20) NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    is_current boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_academic_year_dates CHECK ((end_date > start_date))
+);
+
+
+--
+-- Name: academic_years_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.academic_years ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.academic_years_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: assessments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.assessments (
+    id bigint NOT NULL,
+    teaching_assignment_id bigint NOT NULL,
+    title character varying(200) NOT NULL,
+    assessment_type character varying(50) NOT NULL,
+    assessment_date date NOT NULL,
+    max_score numeric(7,2) NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_assessment_max_score CHECK ((max_score > (0)::numeric))
+);
+
+
+--
+-- Name: assessments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.assessments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.assessments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: attendance_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.attendance_events (
+    id bigint NOT NULL,
+    employee_assignment_id bigint NOT NULL,
+    event_type character varying(10) NOT NULL,
+    event_time timestamp with time zone NOT NULL,
+    recorded_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    verification_method character varying(20) NOT NULL,
+    recorded_by bigint,
+    manual_reason text,
+    notes text,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT attendance_events_event_type_check CHECK (((event_type)::text = ANY (ARRAY[('IN'::character varying)::text, ('OUT'::character varying)::text]))),
+    CONSTRAINT attendance_events_verification_method_check CHECK (((verification_method)::text = ANY (ARRAY[('FACE'::character varying)::text, ('MANUAL'::character varying)::text, ('FINGERPRINT'::character varying)::text]))),
+    CONSTRAINT manual_event_reason_check CHECK ((((verification_method)::text <> 'MANUAL'::text) OR ((recorded_by IS NOT NULL) AND (manual_reason IS NOT NULL) AND (length(TRIM(BOTH FROM manual_reason)) > 0))))
+);
+
+
+--
+-- Name: attendance_events_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.attendance_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.attendance_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: classes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.classes (
+    id bigint NOT NULL,
+    school_id bigint NOT NULL,
+    academic_year_id bigint NOT NULL,
+    name character varying(100) NOT NULL,
+    grade_level integer NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_grade_level CHECK (((grade_level >= 1) AND (grade_level <= 12)))
+);
+
+
+--
+-- Name: classes_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.classes ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.classes_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: directorates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.directorates (
+    id bigint NOT NULL,
+    ministry_id bigint NOT NULL,
+    name character varying(200) NOT NULL,
+    address text,
+    phone character varying(30),
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: directorates_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.directorates ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.directorates_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: employee_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_assignments (
+    id bigint NOT NULL,
+    employee_id bigint NOT NULL,
+    school_id bigint,
+    directorate_id bigint,
+    position_type character varying(30) NOT NULL,
+    work_schedule_type character varying(30) NOT NULL,
+    weekly_quota_units numeric(6,2),
+    start_date date NOT NULL,
+    end_date date,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_assignment_dates CHECK (((end_date IS NULL) OR (end_date >= start_date))),
+    CONSTRAINT chk_assignment_location CHECK ((((school_id IS NOT NULL) AND (directorate_id IS NULL)) OR ((school_id IS NULL) AND (directorate_id IS NOT NULL)))),
+    CONSTRAINT chk_position_type CHECK (((position_type)::text = ANY (ARRAY[('TEACHER'::character varying)::text, ('PRINCIPAL'::character varying)::text, ('DEPUTY'::character varying)::text, ('ADMINISTRATIVE'::character varying)::text, ('SUPERVISOR'::character varying)::text]))),
+    CONSTRAINT chk_weekly_quota CHECK (((weekly_quota_units IS NULL) OR (weekly_quota_units >= (0)::numeric))),
+    CONSTRAINT chk_work_schedule CHECK (((((position_type)::text = 'TEACHER'::text) AND ((work_schedule_type)::text = 'TEACHING_TIMETABLE'::text)) OR (((position_type)::text <> 'TEACHER'::text) AND ((work_schedule_type)::text = 'FULL_DAY'::text))))
+);
+
+
+--
+-- Name: employee_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.employee_assignments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.employee_assignments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: employees; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employees (
+    id bigint NOT NULL,
+    employee_number character varying(50),
+    full_name character varying(200) NOT NULL,
+    phone character varying(30),
+    email character varying(255),
+    hire_date date,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: employees_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.employees ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.employees_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: grades; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.grades (
+    id bigint NOT NULL,
+    assessment_id bigint NOT NULL,
+    enrollment_id bigint NOT NULL,
+    score numeric(7,2) NOT NULL,
+    recorded_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_grade_score CHECK ((score >= (0)::numeric))
+);
+
+
+--
+-- Name: grades_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.grades ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.grades_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ministries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ministries (
+    id bigint NOT NULL,
+    name character varying(200) NOT NULL,
+    country character varying(100) DEFAULT 'Syria'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: ministries_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ministries ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.ministries_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: request_attachments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.request_attachments (
+    id bigint NOT NULL,
+    request_id bigint NOT NULL,
+    uploaded_by bigint NOT NULL,
+    file_name character varying(255) NOT NULL,
+    file_path text NOT NULL,
+    file_type character varying(100),
+    file_size bigint,
+    uploaded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_attachment_file_size CHECK (((file_size IS NULL) OR (file_size > 0)))
+);
+
+
+--
+-- Name: request_attachments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.request_attachments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.request_attachments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: request_status_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.request_status_history (
+    id bigint NOT NULL,
+    request_id bigint NOT NULL,
+    old_status character varying(30),
+    new_status character varying(30) NOT NULL,
+    changed_by bigint NOT NULL,
+    notes text,
+    changed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_history_new_status CHECK (((new_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))),
+    CONSTRAINT chk_history_old_status CHECK (((old_status IS NULL) OR ((old_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))))
+);
+
+
+--
+-- Name: request_status_history_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.request_status_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.request_status_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: roles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.roles (
+    id bigint NOT NULL,
+    name character varying(50) NOT NULL,
+    description text,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: roles_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.roles ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.roles_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: school_deputy_authorizations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.school_deputy_authorizations (
+    id bigint NOT NULL,
+    school_id bigint NOT NULL,
+    deputy_user_id bigint NOT NULL,
+    authorized_by bigint NOT NULL,
+    authorized_at timestamp with time zone DEFAULT now() NOT NULL,
+    revoked_at timestamp with time zone,
+    is_active boolean DEFAULT true NOT NULL,
+    CONSTRAINT chk_deputy_not_authorizer CHECK ((deputy_user_id <> authorized_by)),
+    CONSTRAINT chk_revocation_date CHECK ((((is_active = true) AND (revoked_at IS NULL)) OR ((is_active = false) AND (revoked_at IS NOT NULL))))
+);
+
+
+--
+-- Name: school_deputy_authorizations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.school_deputy_authorizations ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.school_deputy_authorizations_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: school_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.school_requests (
+    id bigint NOT NULL,
+    request_number character varying(30) NOT NULL,
+    school_id bigint NOT NULL,
+    created_by bigint NOT NULL,
+    request_type character varying(50) NOT NULL,
+    title character varying(200) NOT NULL,
+    description text NOT NULL,
+    priority_score numeric(5,2),
+    priority_reason text,
+    status character varying(30) DEFAULT 'DRAFT'::character varying NOT NULL,
+    submitted_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_priority_score CHECK (((priority_score IS NULL) OR ((priority_score >= (0)::numeric) AND (priority_score <= (100)::numeric)))),
+    CONSTRAINT chk_school_request_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))),
+    CONSTRAINT chk_school_request_type CHECK (((request_type)::text = ANY (ARRAY[('MAINTENANCE'::character varying)::text, ('TEACHERS'::character varying)::text, ('TEXTBOOKS'::character varying)::text, ('FURNITURE'::character varying)::text, ('COMPUTERS'::character varying)::text, ('OTHER'::character varying)::text])))
+);
+
+
+--
+-- Name: school_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.school_requests ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.school_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: schools; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schools (
+    id bigint NOT NULL,
+    directorate_id bigint NOT NULL,
+    name character varying(200) NOT NULL,
+    school_code character varying(50),
+    address text,
+    phone character varying(30),
+    school_type character varying(50),
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: schools_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.schools ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.schools_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: sections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.sections (
+    id bigint NOT NULL,
+    class_id bigint NOT NULL,
+    name character varying(50) NOT NULL,
+    capacity integer,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_section_capacity CHECK (((capacity IS NULL) OR (capacity > 0)))
+);
+
+
+--
+-- Name: sections_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.sections ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.sections_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: student_enrollments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.student_enrollments (
+    id bigint NOT NULL,
+    student_id bigint NOT NULL,
+    section_id bigint NOT NULL,
+    enrollment_date date DEFAULT CURRENT_DATE NOT NULL,
+    withdrawal_date date,
+    status character varying(20) DEFAULT 'ACTIVE'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_enrollment_dates CHECK (((withdrawal_date IS NULL) OR (withdrawal_date >= enrollment_date))),
+    CONSTRAINT chk_enrollment_status CHECK (((status)::text = ANY (ARRAY[('ACTIVE'::character varying)::text, ('TRANSFERRED'::character varying)::text, ('WITHDRAWN'::character varying)::text, ('GRADUATED'::character varying)::text])))
+);
+
+
+--
+-- Name: student_enrollments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.student_enrollments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.student_enrollments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: students; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.students (
+    id bigint NOT NULL,
+    student_number character varying(50),
+    full_name character varying(200) NOT NULL,
+    date_of_birth date,
+    guardian_name character varying(200),
+    guardian_phone character varying(30),
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: students_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.students ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.students_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: subjects; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.subjects (
+    id bigint NOT NULL,
+    name character varying(150) NOT NULL,
+    description text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
+-- Name: subjects_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.subjects ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.subjects_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: teacher_profiles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.teacher_profiles (
+    employee_id bigint NOT NULL,
+    specialization character varying(150),
+    qualification character varying(200),
+    years_of_experience integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_teacher_experience CHECK ((years_of_experience >= 0))
+);
+
+
+--
+-- Name: teaching_assignments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.teaching_assignments (
+    id bigint NOT NULL,
+    employee_assignment_id bigint NOT NULL,
+    section_id bigint NOT NULL,
+    subject_id bigint NOT NULL,
+    weekly_quota_units numeric(6,2) NOT NULL,
+    start_date date NOT NULL,
+    end_date date,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_teaching_dates CHECK (((end_date IS NULL) OR (end_date >= start_date))),
+    CONSTRAINT chk_teaching_quota CHECK ((weekly_quota_units > (0)::numeric))
+);
+
+
+--
+-- Name: teaching_assignments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.teaching_assignments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.teaching_assignments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: timetable_periods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.timetable_periods (
+    id bigint NOT NULL,
+    timetable_id bigint NOT NULL,
+    teaching_assignment_id bigint NOT NULL,
+    section_id bigint NOT NULL,
+    day_of_week smallint NOT NULL,
+    period_number smallint NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_period_day CHECK (((day_of_week >= 1) AND (day_of_week <= 7))),
+    CONSTRAINT chk_period_duration CHECK (((end_time - start_time) = '00:45:00'::interval)),
+    CONSTRAINT chk_period_number CHECK ((period_number > 0))
+);
+
+
+--
+-- Name: timetable_periods_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.timetable_periods ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.timetable_periods_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: timetables; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.timetables (
+    id bigint NOT NULL,
+    section_id bigint NOT NULL,
+    academic_year_id bigint NOT NULL,
+    name character varying(150) NOT NULL,
+    effective_from date NOT NULL,
+    effective_to date,
+    is_approved boolean DEFAULT false NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT chk_timetable_dates CHECK (((effective_to IS NULL) OR (effective_to >= effective_from)))
+);
+
+
+--
+-- Name: timetables_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.timetables ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.timetables_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id bigint NOT NULL,
+    role_id bigint NOT NULL,
+    ministry_id bigint,
+    directorate_id bigint,
+    school_id bigint,
+    full_name character varying(200) NOT NULL,
+    username character varying(100) NOT NULL,
+    email character varying(255),
+    password_hash text NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    last_login_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    employee_id bigint,
+    CONSTRAINT chk_user_scope CHECK ((((((ministry_id IS NOT NULL))::integer + ((directorate_id IS NOT NULL))::integer) + ((school_id IS NOT NULL))::integer) <= 1))
+);
+
+
+--
+-- Name: users_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.users_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: academic_years academic_years_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.academic_years
+    ADD CONSTRAINT academic_years_name_key UNIQUE (name);
+
+
+--
+-- Name: academic_years academic_years_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.academic_years
+    ADD CONSTRAINT academic_years_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: assessments assessments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessments
+    ADD CONSTRAINT assessments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: attendance_events attendance_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_events
+    ADD CONSTRAINT attendance_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: classes classes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.classes
+    ADD CONSTRAINT classes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: directorates directorates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directorates
+    ADD CONSTRAINT directorates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: employee_assignments employee_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_assignments
+    ADD CONSTRAINT employee_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: employees employees_employee_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_employee_number_key UNIQUE (employee_number);
+
+
+--
+-- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: grades grades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grades
+    ADD CONSTRAINT grades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ministries ministries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ministries
+    ADD CONSTRAINT ministries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: request_attachments request_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_attachments
+    ADD CONSTRAINT request_attachments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: request_status_history request_status_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_status_history
+    ADD CONSTRAINT request_status_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: roles roles_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_name_key UNIQUE (name);
+
+
+--
+-- Name: roles roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roles
+    ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: school_deputy_authorizations school_deputy_authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_deputy_authorizations
+    ADD CONSTRAINT school_deputy_authorizations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: school_requests school_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: school_requests school_requests_request_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_request_number_key UNIQUE (request_number);
+
+
+--
+-- Name: schools schools_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schools
+    ADD CONSTRAINT schools_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schools schools_school_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schools
+    ADD CONSTRAINT schools_school_code_key UNIQUE (school_code);
+
+
+--
+-- Name: sections sections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sections
+    ADD CONSTRAINT sections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: student_enrollments student_enrollments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.student_enrollments
+    ADD CONSTRAINT student_enrollments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: students students_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.students
+    ADD CONSTRAINT students_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: students students_student_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.students
+    ADD CONSTRAINT students_student_number_key UNIQUE (student_number);
+
+
+--
+-- Name: subjects subjects_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subjects
+    ADD CONSTRAINT subjects_name_key UNIQUE (name);
+
+
+--
+-- Name: subjects subjects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.subjects
+    ADD CONSTRAINT subjects_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: teacher_profiles teacher_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teacher_profiles
+    ADD CONSTRAINT teacher_profiles_pkey PRIMARY KEY (employee_id);
+
+
+--
+-- Name: teaching_assignments teaching_assignments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teaching_assignments
+    ADD CONSTRAINT teaching_assignments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: timetable_periods timetable_periods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetable_periods
+    ADD CONSTRAINT timetable_periods_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: timetables timetables_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetables
+    ADD CONSTRAINT timetables_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: grades uq_assessment_student; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grades
+    ADD CONSTRAINT uq_assessment_student UNIQUE (assessment_id, enrollment_id);
+
+
+--
+-- Name: classes uq_class_per_year; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.classes
+    ADD CONSTRAINT uq_class_per_year UNIQUE (school_id, academic_year_id, grade_level);
+
+
+--
+-- Name: directorates uq_directorate_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directorates
+    ADD CONSTRAINT uq_directorate_name UNIQUE (ministry_id, name);
+
+
+--
+-- Name: schools uq_school_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schools
+    ADD CONSTRAINT uq_school_name UNIQUE (directorate_id, name);
+
+
+--
+-- Name: sections uq_section_name; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sections
+    ADD CONSTRAINT uq_section_name UNIQUE (class_id, name);
+
+
+--
+-- Name: timetable_periods uq_section_period; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetable_periods
+    ADD CONSTRAINT uq_section_period UNIQUE (timetable_id, day_of_week, period_number);
+
+
+--
+-- Name: student_enrollments uq_student_section; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.student_enrollments
+    ADD CONSTRAINT uq_student_section UNIQUE (student_id, section_id);
+
+
+--
+-- Name: teaching_assignments uq_teaching_assignment_section; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teaching_assignments
+    ADD CONSTRAINT uq_teaching_assignment_section UNIQUE (id, section_id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_employee_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_employee_id_key UNIQUE (employee_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_username_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_username_key UNIQUE (username);
+
+
+--
+-- Name: idx_assessments_teaching; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assessments_teaching ON public.assessments USING btree (teaching_assignment_id);
+
+
+--
+-- Name: idx_assignments_dates; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assignments_dates ON public.employee_assignments USING btree (start_date, end_date);
+
+
+--
+-- Name: idx_assignments_directorate; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assignments_directorate ON public.employee_assignments USING btree (directorate_id);
+
+
+--
+-- Name: idx_assignments_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assignments_employee ON public.employee_assignments USING btree (employee_id);
+
+
+--
+-- Name: idx_assignments_school; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_assignments_school ON public.employee_assignments USING btree (school_id);
+
+
+--
+-- Name: idx_attendance_events_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_attendance_events_employee ON public.attendance_events USING btree (employee_assignment_id);
+
+
+--
+-- Name: idx_attendance_events_employee_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_attendance_events_employee_time ON public.attendance_events USING btree (employee_assignment_id, event_time);
+
+
+--
+-- Name: idx_attendance_events_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_attendance_events_time ON public.attendance_events USING btree (event_time);
+
+
+--
+-- Name: idx_classes_academic_year; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_classes_academic_year ON public.classes USING btree (academic_year_id);
+
+
+--
+-- Name: idx_classes_school; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_classes_school ON public.classes USING btree (school_id);
+
+
+--
+-- Name: idx_enrollments_section; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_enrollments_section ON public.student_enrollments USING btree (section_id);
+
+
+--
+-- Name: idx_enrollments_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_enrollments_status ON public.student_enrollments USING btree (status);
+
+
+--
+-- Name: idx_enrollments_student; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_enrollments_student ON public.student_enrollments USING btree (student_id);
+
+
+--
+-- Name: idx_grades_enrollment; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_grades_enrollment ON public.grades USING btree (enrollment_id);
+
+
+--
+-- Name: idx_period_timetable; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_period_timetable ON public.timetable_periods USING btree (timetable_id);
+
+
+--
+-- Name: idx_sections_class; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sections_class ON public.sections USING btree (class_id);
+
+
+--
+-- Name: idx_teaching_employee; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_teaching_employee ON public.teaching_assignments USING btree (employee_assignment_id);
+
+
+--
+-- Name: idx_teaching_section; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_teaching_section ON public.teaching_assignments USING btree (section_id);
+
+
+--
+-- Name: idx_teaching_subject; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_teaching_subject ON public.teaching_assignments USING btree (subject_id);
+
+
+--
+-- Name: idx_timetable_section; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_timetable_section ON public.timetables USING btree (section_id);
+
+
+--
+-- Name: uq_active_school_deputy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_active_school_deputy ON public.school_deputy_authorizations USING btree (school_id, deputy_user_id) WHERE (is_active = true);
+
+
+--
+-- Name: attendance_events trg_validate_attendance_sequence; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_validate_attendance_sequence BEFORE INSERT ON public.attendance_events FOR EACH ROW EXECUTE FUNCTION public.validate_attendance_sequence();
+
+
+--
+-- Name: attendance_events attendance_events_employee_assignment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_events
+    ADD CONSTRAINT attendance_events_employee_assignment_id_fkey FOREIGN KEY (employee_assignment_id) REFERENCES public.employee_assignments(id);
+
+
+--
+-- Name: attendance_events attendance_events_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_events
+    ADD CONSTRAINT attendance_events_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: employee_assignments employee_assignments_directorate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_assignments
+    ADD CONSTRAINT employee_assignments_directorate_id_fkey FOREIGN KEY (directorate_id) REFERENCES public.directorates(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: employee_assignments employee_assignments_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_assignments
+    ADD CONSTRAINT employee_assignments_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: assessments fk_assessment_teaching; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessments
+    ADD CONSTRAINT fk_assessment_teaching FOREIGN KEY (teaching_assignment_id) REFERENCES public.teaching_assignments(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: employee_assignments fk_assignment_employee; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_assignments
+    ADD CONSTRAINT fk_assignment_employee FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: classes fk_classes_academic_year; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.classes
+    ADD CONSTRAINT fk_classes_academic_year FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: classes fk_classes_school; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.classes
+    ADD CONSTRAINT fk_classes_school FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: directorates fk_directorates_ministry; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.directorates
+    ADD CONSTRAINT fk_directorates_ministry FOREIGN KEY (ministry_id) REFERENCES public.ministries(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: student_enrollments fk_enrollment_section; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.student_enrollments
+    ADD CONSTRAINT fk_enrollment_section FOREIGN KEY (section_id) REFERENCES public.sections(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: student_enrollments fk_enrollment_student; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.student_enrollments
+    ADD CONSTRAINT fk_enrollment_student FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: grades fk_grade_assessment; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grades
+    ADD CONSTRAINT fk_grade_assessment FOREIGN KEY (assessment_id) REFERENCES public.assessments(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: grades fk_grade_enrollment; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grades
+    ADD CONSTRAINT fk_grade_enrollment FOREIGN KEY (enrollment_id) REFERENCES public.student_enrollments(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: grades fk_grade_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.grades
+    ADD CONSTRAINT fk_grade_user FOREIGN KEY (recorded_by) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: timetable_periods fk_period_teaching_assignment; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetable_periods
+    ADD CONSTRAINT fk_period_teaching_assignment FOREIGN KEY (teaching_assignment_id, section_id) REFERENCES public.teaching_assignments(id, section_id) ON DELETE RESTRICT;
+
+
+--
+-- Name: timetable_periods fk_period_timetable; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetable_periods
+    ADD CONSTRAINT fk_period_timetable FOREIGN KEY (timetable_id) REFERENCES public.timetables(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: schools fk_schools_directorate; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schools
+    ADD CONSTRAINT fk_schools_directorate FOREIGN KEY (directorate_id) REFERENCES public.directorates(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: sections fk_sections_class; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.sections
+    ADD CONSTRAINT fk_sections_class FOREIGN KEY (class_id) REFERENCES public.classes(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: teacher_profiles fk_teacher_employee; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teacher_profiles
+    ADD CONSTRAINT fk_teacher_employee FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: teaching_assignments fk_teaching_employee_assignment; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teaching_assignments
+    ADD CONSTRAINT fk_teaching_employee_assignment FOREIGN KEY (employee_assignment_id) REFERENCES public.employee_assignments(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: teaching_assignments fk_teaching_section; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teaching_assignments
+    ADD CONSTRAINT fk_teaching_section FOREIGN KEY (section_id) REFERENCES public.sections(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: teaching_assignments fk_teaching_subject; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.teaching_assignments
+    ADD CONSTRAINT fk_teaching_subject FOREIGN KEY (subject_id) REFERENCES public.subjects(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: timetables fk_timetable_academic_year; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetables
+    ADD CONSTRAINT fk_timetable_academic_year FOREIGN KEY (academic_year_id) REFERENCES public.academic_years(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: timetables fk_timetable_section; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.timetables
+    ADD CONSTRAINT fk_timetable_section FOREIGN KEY (section_id) REFERENCES public.sections(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: users fk_users_role; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: request_attachments request_attachments_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_attachments
+    ADD CONSTRAINT request_attachments_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.school_requests(id) ON DELETE CASCADE;
+
+
+--
+-- Name: request_attachments request_attachments_uploaded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_attachments
+    ADD CONSTRAINT request_attachments_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: request_status_history request_status_history_changed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_status_history
+    ADD CONSTRAINT request_status_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id);
+
+
+--
+-- Name: request_status_history request_status_history_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_status_history
+    ADD CONSTRAINT request_status_history_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.school_requests(id);
+
+
+--
+-- Name: school_deputy_authorizations school_deputy_authorizations_authorized_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_deputy_authorizations
+    ADD CONSTRAINT school_deputy_authorizations_authorized_by_fkey FOREIGN KEY (authorized_by) REFERENCES public.users(id);
+
+
+--
+-- Name: school_deputy_authorizations school_deputy_authorizations_deputy_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_deputy_authorizations
+    ADD CONSTRAINT school_deputy_authorizations_deputy_user_id_fkey FOREIGN KEY (deputy_user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: school_deputy_authorizations school_deputy_authorizations_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_deputy_authorizations
+    ADD CONSTRAINT school_deputy_authorizations_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id);
+
+
+--
+-- Name: school_requests school_requests_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: school_requests school_requests_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id);
+
+
+--
+-- Name: users users_directorate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_directorate_id_fkey FOREIGN KEY (directorate_id) REFERENCES public.directorates(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: users users_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: users users_ministry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_ministry_id_fkey FOREIGN KEY (ministry_id) REFERENCES public.ministries(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: users users_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE RESTRICT;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict 3to6zwhXBPrkMU5EAbSJBKkc5neuanSPyk0o4d8JS5vtOqFayYkaSOkhteiC5tp
+
