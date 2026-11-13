@@ -11,6 +11,8 @@ interface LoginResult {
   role_name: string;
   school_id: number | null;
   directorate_id: number | null;
+  employee_id: number | null;
+  employee_number: string | null;
   is_active: boolean;
 }
 
@@ -24,9 +26,12 @@ export async function loginUser(username: string, password: string) {
         u.school_id,
         u.directorate_id,
         u.is_active,
+        u.employee_id,
+        e.employee_number,
         r.name AS role_name
      FROM users u
      JOIN roles r ON r.id = u.role_id
+     LEFT JOIN employees e ON e.id = u.employee_id
      WHERE u.username = $1
      LIMIT 1`,
     [username]
@@ -57,6 +62,7 @@ export async function loginUser(username: string, password: string) {
     {
       id: Number(user.id),
       role: user.role_name,
+      employeeId: user.employee_id ? Number(user.employee_id) : null,
       schoolId: user.school_id ? Number(user.school_id) : null,
       directorateId: user.directorate_id
         ? Number(user.directorate_id)
@@ -73,6 +79,7 @@ export async function loginUser(username: string, password: string) {
       fullName: user.full_name,
       username: user.username,
       role: user.role_name,
+      employeeNumber: user.employee_number,
       schoolId: user.school_id ? Number(user.school_id) : null,
       directorateId: user.directorate_id
         ? Number(user.directorate_id)

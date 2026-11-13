@@ -1,4 +1,5 @@
 
+import { audit } from "../services/audit.service.js";
 import { Router, Request, Response } from "express";
 import { loginUser } from "../services/auth.service.js";
 import {
@@ -26,6 +27,7 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     const result = await loginUser(username.trim(), password);
+    void audit({ userId: result.user.id, action: "LOGIN", req });
 
     return res.status(200).json({
       success: true,
@@ -39,6 +41,14 @@ router.post("/login", async (req: Request, res: Response) => {
         : "حدث خطأ أثناء تسجيل الدخول";
 
     const status = message.includes("غير صحيحة") ? 401 : 500;
+    if (status === 401) {
+      void audit({
+        userId: null,
+        action: "LOGIN_FAILED",
+        details: { username: String(req.body?.username ?? "").slice(0, 100) },
+        req,
+      });
+    }
 
     return res.status(status).json({
       success: false,

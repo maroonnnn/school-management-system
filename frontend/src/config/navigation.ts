@@ -22,7 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "التقرير الشهري",
     icon: "bi-bar-chart-line",
     description: "عرض ملخص الحضور والتفاصيل الشهرية للمعلم وطباعتها.",
-    roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
+    roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
   },
   {
     path: "/requests/review",

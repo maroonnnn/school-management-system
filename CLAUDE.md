@@ -18,7 +18,9 @@
 
 ## بنية الكود (مختصر)
 - `backend/src/app.ts` — تسجيل المسارات: `/api/auth`, `/api/reports`, `/api/requests`, `/api/health`
-- `backend/src/routes/*` → `services/*` (منطق + SQL). `middleware/auth.middleware.ts` للتحقق من JWT.
+- `backend/src/routes/*` → `services/*` (منطق + SQL). كل route محمي: `authenticateToken` ثم `requireRole(...)`، وبيانات الأشخاص تمر عبر `scope.service.ts`، والاطلاع/التعديل يُسجّل بـ `audit()`.
+- JWT فيه: id, role, employeeId, schoolId, directorateId. والـ login يرجّع كمان employeeNumber.
+- قواعد النطاق: TEACHER نفسه فقط، PRINCIPAL/DEPUTY مدرستهم، DIRECTORATE مدارس مديريتها، MINISTRY مجمّع فقط (بدون أفراد)، STAFF لا شيء.
 - Frontend:
   - `App.tsx` — كل المسارات (react-router-dom 7). صفحة جديدة = أضفها بـ `config/navigation.ts` (القائمة + بطاقات الرئيسية + الأدوار) ثم Route بـ App.tsx ملفوف بـ `<RequireAuth roles=...>`.
   - `context/AuthContext.tsx` — `useAuth()`: user, login, logout. الجلسة بـ sessionStorage.
@@ -49,8 +51,10 @@
 - [x] migration `001_teacher_login.sql`: `users.employee_id` + دور TEACHER. المعلمون يدخلون بـ `t<رقم>` مثل `t1005` (= EMP-1005).
 - إعادة بناء القاعدة من الصفر: createdb → `schema.sql` → `seed.sql`. بعد أي migration جديد: طبّقه ثم أعد تصدير schema.sql.
 - [x] 0.3 React Router + Layout عربي RTL + قائمة جانبية حسب الدور + انتهاء الجلسة بعد 30 دقيقة خمول (FR-AUTH-02 من جهة الواجهة)
-- [ ] AUTH: الأدوار والنطاق وعزل النطاق في كل استعلام (03, 04, 06)، انتهاء الجلسة 30 دقيقة (02)، إنشاء المستخدمين (05)
-- [ ] AUTH-07/08/10: سجل تدقيق (جدول append-only)
+- [x] AUTH-03/04/06: `requireRole(...)` بـ `middleware/auth.middleware.ts` + `services/scope.service.ts` (`assertCanViewEmployee`). مطبّق على التقارير والطلبات. مُختبر بـ 11 حالة.
+- [x] AUTH-07/08/10: جدول `audit_logs` (migration 002) غير قابل للتعديل/الحذف بـ trigger. `audit()` بـ `services/audit.service.ts` يسجّل: LOGIN, LOGIN_FAILED, ACCESS_DENIED, VIEW_TEACHER_REPORT, REQUEST_STATUS_CHANGE.
+- [ ] AUTH-05: إنشاء المستخدمين من الواجهة (مع DATA)
+- [ ] AUTH-02 من جهة الخادم: JWT حالياً 8 ساعات؛ الخمول 30 دقيقة مطبّق بالواجهة فقط
 - [ ] DATA-01..08: CRUD مدارس، معلمين، إداريين، طلاب، صفوف/شعب/مواد، سنة دراسية
 
 ### الأسبوع 2 (11-20 → 11-26): الجداول + الحضور
@@ -86,9 +90,8 @@
 ## مشاكل معروفة (للإصلاح لاحقاً)
 - التقرير الشهري يحسب الأيام المستقبلية من الشهر الحالي كـ "بدون سجل حضور" → يجب قصّ الفترة حتى اليوم (أسبوع 4 - RPT).
 - `GET /api/requests` غير موجود؛ الموجود `/api/requests/directorate` فقط.
-- `/api/reports/*` بدون مصادقة بالـ backend، و`MonthlyReport.tsx` يستخدم fetch مباشر (لازم apiFetch) → ضمن مهمة AUTH-04/06.
 - صفحة مراجعة الطلبات لا تعرض اسم الحالة لـ APPROVED/IN_PROGRESS/COMPLETED/REJECTED (فارغة).
-- الحماية حسب الدور حالياً بالواجهة فقط؛ الـ backend لازم يفرضها (المهمة التالية).
+- audit_logs فيه صف تجريبي واحد (LOGIN بدون مستخدم، 2026-11-13) ما بينمسح — طبيعي.
 
 ## سجل التقدم
 - 2026-11-13: إنشاء الخطة وهذا الملف.
@@ -96,3 +99,4 @@
 - 2026-11-13: seed generator جاهز ومُختبر. ملاحظة: أقصى نصاب منفّذ بالبرنامج 18 من 22 (مقصود — يظهر "متبقي" بالتقارير).
 - 2026-11-13: school_pilot جاهزة، login + التقريرين مُختبرين عبر API. إصلاح: التقرير الشهري الملخّص كان يرجع فاضي لما `timetables.effective_to = NULL`. التالي: 0.3 Router + Layout.
 - 2026-11-13: git repo جديد للمشروع. 0.3 خلص ومُختبر بالمتصفح (directorate.admin يشوف الطلبات، t1005 ممنوع منها). التالي: AUTH بالـ backend (أدوار + عزل النطاق + سجل التدقيق).
+- 2026-11-13: AUTH backend خلص (أدوار، نطاق، سجل تدقيق). التالي: DATA-01..08 (CRUD مدارس/معلمين/طلاب/صفوف) + AUTH-05.

@@ -1,10 +1,20 @@
 
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { audit } from "../services/audit.service.js";
+
+export type Role =
+  | "MINISTRY_ADMIN"
+  | "DIRECTORATE_ADMIN"
+  | "SCHOOL_PRINCIPAL"
+  | "SCHOOL_DEPUTY"
+  | "SCHOOL_STAFF"
+  | "TEACHER";
 
 export interface AuthenticatedUser {
   id: number;
-  role: string;
+  role: Role;
+  employeeId: number | null;
   schoolId: number | null;
   directorateId: number | null;
 }
@@ -52,4 +62,23 @@ export function authenticateToken(
       message: "رمز الدخول غير صالح أو منتهي الصلاحية",
     });
   }
+}
+
+/** Use after authenticateToken. Rejects (403) and audits any role not in the list (FR-AUTH-06). */
+export function requireRole(...roles: Role[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.user && roles.includes(req.user.role)) return next();
+    void audit({
+      userId: req.user?.id ?? null,
+      action: "ACCESS_DENIED",
+      entityType: "route",
+      entityId: `${req.method} ${req.originalUrl}`.slice(0, 100),
+      details: { role: req.user?.role },
+      req,
+    });
+    return res.status(403).json({
+      success: false,
+      message: "ليس لديك صلاحية لتنفيذ هذا الإجراء",
+    });
+  };
 }

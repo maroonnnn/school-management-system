@@ -1,3 +1,5 @@
+import { apiFetch } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import { useState, type FormEvent } from "react";
 
 interface MonthlyReportData {
@@ -42,7 +44,9 @@ function formatMonth(value: string) {
 }
 
 function MonthlyReport() {
-  const [employeeNumber, setEmployeeNumber] = useState("TEST-EMP-001");
+  const { user } = useAuth();
+  const isTeacher = user?.role === "TEACHER";
+  const [employeeNumber, setEmployeeNumber] = useState(user?.employeeNumber ?? "");
   const [month, setMonth] = useState("2026-10");
   const [detailedReport, setDetailedReport] = useState<MonthlyDetailedLesson[]>([]);
   const [report, setReport] = useState<MonthlyReportData | null>(null);
@@ -61,23 +65,10 @@ function MonthlyReport() {
         `employeeNumber=${encodeURIComponent(employeeNumber)}` +
         `&month=${encodeURIComponent(month)}`;
 
-      const [summaryResponse, detailedResponse] = await Promise.all([
-        fetch(`http://localhost:5000/api/reports/monthly?${query}`),
-        fetch(`http://localhost:5000/api/reports/monthly/detailed?${query}`),
-      ]);
-
       const [summaryResult, detailedResult] = await Promise.all([
-        summaryResponse.json(),
-        detailedResponse.json(),
+        apiFetch<{ data: MonthlyReportData[] }>(`/reports/monthly?${query}`),
+        apiFetch<{ data: MonthlyDetailedLesson[] }>(`/reports/monthly/detailed?${query}`),
       ]);
-
-      if (!summaryResponse.ok || !summaryResult.success) {
-        throw new Error(summaryResult.message || "تعذر جلب التقرير الشهري");
-      }
-
-      if (!detailedResponse.ok || !detailedResult.success) {
-        throw new Error(detailedResult.message || "تعذر جلب التقرير التفصيلي");
-      }
 
       if (!summaryResult.data || summaryResult.data.length === 0) {
         setError("لا توجد بيانات لهذا المدرّس في الشهر المحدد.");
@@ -149,6 +140,7 @@ function MonthlyReport() {
                     className="form-control form-control-lg"
                     value={employeeNumber}
                     onChange={(e) => setEmployeeNumber(e.target.value)}
+                    readOnly={isTeacher}
                     placeholder="أدخل الرقم الوظيفي"
                     required
                   />

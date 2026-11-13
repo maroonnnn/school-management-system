@@ -11,6 +11,7 @@ export interface AuthUser {
   fullName: string;
   username: string;
   role: Role;
+  employeeNumber: string | null;
   schoolId: number | null;
   directorateId: number | null;
 }

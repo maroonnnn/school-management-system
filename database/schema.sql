@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 3to6zwhXBPrkMU5EAbSJBKkc5neuanSPyk0o4d8JS5vtOqFayYkaSOkhteiC5tp
+\restrict 9XOb6sydYJEClpCscnncditptX2jBhxWCwkJA6FAfumkDRb5sV4g6uIOluNidBM
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -18,6 +18,19 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
+
+--
+-- Name: prevent_audit_log_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
+$$;
+
 
 --
 -- Name: validate_attendance_sequence(); Type: FUNCTION; Schema: public; Owner: -
@@ -157,6 +170,36 @@ CREATE TABLE public.attendance_events (
 
 ALTER TABLE public.attendance_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.attendance_events_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: audit_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.audit_logs (
+    id bigint NOT NULL,
+    user_id bigint,
+    action character varying(50) NOT NULL,
+    entity_type character varying(50),
+    entity_id character varying(100),
+    details jsonb,
+    ip_address character varying(64),
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: audit_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.audit_logs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.audit_logs_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -834,6 +877,14 @@ ALTER TABLE ONLY public.attendance_events
 
 
 --
+-- Name: audit_logs audit_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: classes classes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1194,6 +1245,20 @@ CREATE INDEX idx_attendance_events_time ON public.attendance_events USING btree 
 
 
 --
+-- Name: idx_audit_logs_action_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_logs_action_time ON public.audit_logs USING btree (action, created_at DESC);
+
+
+--
+-- Name: idx_audit_logs_user_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_audit_logs_user_time ON public.audit_logs USING btree (user_id, created_at DESC);
+
+
+--
 -- Name: idx_classes_academic_year; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1285,6 +1350,13 @@ CREATE UNIQUE INDEX uq_active_school_deputy ON public.school_deputy_authorizatio
 
 
 --
+-- Name: audit_logs trg_audit_logs_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_audit_logs_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.audit_logs FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_audit_log_change();
+
+
+--
 -- Name: attendance_events trg_validate_attendance_sequence; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1305,6 +1377,14 @@ ALTER TABLE ONLY public.attendance_events
 
 ALTER TABLE ONLY public.attendance_events
     ADD CONSTRAINT attendance_events_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: audit_logs audit_logs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.audit_logs
+    ADD CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 
 
 --
@@ -1599,5 +1679,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 3to6zwhXBPrkMU5EAbSJBKkc5neuanSPyk0o4d8JS5vtOqFayYkaSOkhteiC5tp
+\unrestrict 9XOb6sydYJEClpCscnncditptX2jBhxWCwkJA6FAfumkDRb5sV4g6uIOluNidBM
 

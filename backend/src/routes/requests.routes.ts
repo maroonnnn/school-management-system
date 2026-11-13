@@ -3,7 +3,9 @@ import { Router, Response } from "express";
 import {
   AuthRequest,
   authenticateToken,
+  requireRole,
 } from "../middleware/auth.middleware.js";
+import { audit } from "../services/audit.service.js";
 import {
   createDraftRequest,
     submitDraftRequest,
@@ -20,6 +22,7 @@ const router = Router();
 router.post(
   "/",
   authenticateToken,
+  requireRole("SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"),
   async (req: AuthRequest, res: Response) => {
     try {
       const { requestType, title, description } = req.body;
@@ -71,6 +74,7 @@ router.post(
 router.post(
   "/:id/submit",
   authenticateToken,
+  requireRole("SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"),
   async (req: AuthRequest, res: Response) => {
     try {
       const requestId = Number(req.params.id);
@@ -118,6 +122,7 @@ router.post(
 router.get(
   "/directorate",
   authenticateToken,
+  requireRole("DIRECTORATE_ADMIN"),
   async (req: AuthRequest, res: Response) => {
     try {
       const requests = await getDirectorateRequests(req.user!.id);
@@ -182,6 +187,14 @@ async function handleDirectorateTransition(
       newStatus,
       rejectionReason
     );
+    void audit({
+      userId: req.user!.id,
+      action: "REQUEST_STATUS_CHANGE",
+      entityType: "school_request",
+      entityId: requestId,
+      details: { newStatus, reason: rejectionReason ?? null },
+      req,
+    });
 
     const messages: Record<DirectorateRequestStatus, string> = {
       UNDER_REVIEW: "تم تحويل الطلب إلى قيد المراجعة",
@@ -219,6 +232,7 @@ async function handleDirectorateTransition(
 router.post(
   "/:id/review",
   authenticateToken,
+  requireRole("DIRECTORATE_ADMIN"),
   (req: AuthRequest, res: Response) =>
     handleDirectorateTransition(req, res, "UNDER_REVIEW")
 );
@@ -226,6 +240,7 @@ router.post(
 router.post(
   "/:id/approve",
   authenticateToken,
+  requireRole("DIRECTORATE_ADMIN"),
   (req: AuthRequest, res: Response) =>
     handleDirectorateTransition(req, res, "APPROVED")
 );
@@ -233,6 +248,7 @@ router.post(
 router.post(
   "/:id/reject",
   authenticateToken,
+  requireRole("DIRECTORATE_ADMIN"),
   (req: AuthRequest, res: Response) =>
     handleDirectorateTransition(req, res, "REJECTED")
 );
