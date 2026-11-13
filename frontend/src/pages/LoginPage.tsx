@@ -1,57 +1,28 @@
 import { useState, type FormEvent } from "react";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
-interface AuthUser {
-  id: number;
-  fullName: string;
-  username: string;
-  role: string;
-  schoolId: number | null;
-  directorateId: number | null;
-}
-
-interface LoginResponse {
-  success: boolean;
-  message?: string;
-  data?: {
-    token: string;
-    user: AuthUser;
-  };
-}
-
-interface LoginPageProps {
-  onLogin: (token: string, user: AuthUser) => void;
-}
-
-function LoginPage({ onLogin }: LoginPageProps) {
+function LoginPage() {
+  const { user, login, logoutReason } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  if (user) return <Navigate to="/" replace />;
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
-
     try {
-      const response = await fetch("http://localhost:5000/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
-      });
-      const result = (await response.json()) as LoginResponse;
-
-      if (!response.ok || !result.success || !result.data?.token || !result.data.user) {
-        throw new Error(result.message || "تعذر تسجيل الدخول");
-      }
-
-      onLogin(result.data.token, result.data.user);
+      await login(username, password);
+      const from = (location.state as { from?: string } | null)?.from ?? "/";
+      navigate(from, { replace: true });
     } catch (loginError) {
-      setError(
-        loginError instanceof Error
-          ? loginError.message
-          : "حدث خطأ أثناء الاتصال بالخادم",
-      );
+      setError(loginError instanceof Error ? loginError.message : "حدث خطأ أثناء الاتصال بالخادم");
     } finally {
       setLoading(false);
     }
@@ -85,6 +56,13 @@ function LoginPage({ onLogin }: LoginPageProps) {
                 <p className="text-secondary mb-4">
                   أدخل بيانات حسابك للمتابعة إلى الصفحة الرئيسية.
                 </p>
+
+                {logoutReason && !error && (
+                  <div className="alert alert-warning" role="status">
+                    <i className="bi bi-clock-history ms-2"></i>
+                    {logoutReason}
+                  </div>
+                )}
 
                 {error && (
                   <div className="alert alert-danger" role="alert">

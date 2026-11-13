@@ -1,3 +1,4 @@
+import { apiFetch } from "../services/api";
 import { useCallback, useState } from "react";
 
 type RequestStatus = "SUBMITTED" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
@@ -21,7 +22,6 @@ interface ApiResponse<T> {
   data?: T;
 }
 
-const API_URL = "http://localhost:5000/api/requests";
 
 const statusLabels: Record<RequestStatus, string> = {
   SUBMITTED: "مقدّم",
@@ -37,11 +37,7 @@ const statusClasses: Record<RequestStatus, string> = {
   REJECTED: "text-bg-danger",
 };
 
-interface DirectorateRequestsProps {
-  token: string;
-}
-
-function DirectorateRequests({ token }: DirectorateRequestsProps) {
+function DirectorateRequests() {
   const [requests, setRequests] = useState<SchoolRequest[]>([]);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -59,15 +55,7 @@ function DirectorateRequests({ token }: DirectorateRequestsProps) {
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/directorate`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const result =
-        (await response.json()) as ApiResponse<SchoolRequest[]>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "تعذر جلب طلبات المديرية");
-      }
+      const result = await apiFetch<ApiResponse<SchoolRequest[]>>("/requests/directorate");
 
       if (!Array.isArray(result.data)) {
         throw new Error("استجابة الخادم لا تحتوي على قائمة الطلبات");
@@ -86,7 +74,7 @@ function DirectorateRequests({ token }: DirectorateRequestsProps) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   async function changeRequestStatus(
     requestId: number,
@@ -98,23 +86,10 @@ function DirectorateRequests({ token }: DirectorateRequestsProps) {
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/${requestId}/${action}`, {
+      const result = await apiFetch<ApiResponse<SchoolRequest>>(`/requests/${requestId}/${action}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...(action === "reject" && {
-            "Content-Type": "application/json",
-          }),
-        },
-        ...(action === "reject" && {
-          body: JSON.stringify({ reason }),
-        }),
+        ...(action === "reject" && { body: JSON.stringify({ reason }) }),
       });
-      const result = (await response.json()) as ApiResponse<SchoolRequest>;
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "تعذر تحديث حالة الطلب");
-      }
 
       setRejectingRequestId(null);
       setRejectionReason("");

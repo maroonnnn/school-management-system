@@ -19,7 +19,15 @@
 ## بنية الكود (مختصر)
 - `backend/src/app.ts` — تسجيل المسارات: `/api/auth`, `/api/reports`, `/api/requests`, `/api/health`
 - `backend/src/routes/*` → `services/*` (منطق + SQL). `middleware/auth.middleware.ts` للتحقق من JWT.
-- `frontend/src/pages/`: LoginPage, HomePage, DirectorateRequests, MonthlyReport. لا يوجد Router بعد (App.tsx).
+- Frontend:
+  - `App.tsx` — كل المسارات (react-router-dom 7). صفحة جديدة = أضفها بـ `config/navigation.ts` (القائمة + بطاقات الرئيسية + الأدوار) ثم Route بـ App.tsx ملفوف بـ `<RequireAuth roles=...>`.
+  - `context/AuthContext.tsx` — `useAuth()`: user, login, logout. الجلسة بـ sessionStorage.
+  - `services/api.ts` — `apiFetch(path)` يضيف JWT ويرمي `ApiError` بالرسالة العربية؛ 401 → خروج تلقائي. **استخدمه لكل طلب جديد.**
+  - `layouts/MainLayout.tsx` — شريط علوي + قائمة جانبية (منسدلة على الموبايل). الأنماط بآخر `index.css`.
+  - `types/auth.ts` — Role, AuthUser, roleLabels.
+  - pages: LoginPage, HomePage, DirectorateRequests, MonthlyReport.
+- التشغيل: `.claude/launch.json` فيه backend (5000) و frontend (5173).
+- Git: repo خاص بالمشروع، فرع `main`. `.env` غير مرفوع (انظر `backend/.env.example`).
 - قاعدة البيانات: الـ schema الكامل في `database/schema.sql` (مُصدَّر بـ pg_dump من القاعدة الحقيقية). 24 جدول: ministries, directorates, schools, roles, users, employees, employee_assignments, teacher_profiles, students, student_enrollments, academic_years, grades, classes, sections, subjects, teaching_assignments, timetables, timetable_periods, attendance_events (+ trigger `validate_attendance_sequence`), assessments, school_requests, request_status_history, request_attachments, school_deputy_authorizations.
 - البيانات الحالية قليلة جداً (مستخدمَين + مدرسة واحدة) → نحتاج seed.
 - أدوات PostgreSQL: `C:/Program Files/PostgreSQL/18/bin/` (pg_dump, psql) — غير موجودة بالـ PATH.
@@ -40,7 +48,7 @@
 - [x] قاعدة جديدة `school_pilot` (schema + migrations + seed)، والـ `.env` صار `DB_NAME=school_pilot`. القاعدة القديمة بقيت كما هي.
 - [x] migration `001_teacher_login.sql`: `users.employee_id` + دور TEACHER. المعلمون يدخلون بـ `t<رقم>` مثل `t1005` (= EMP-1005).
 - إعادة بناء القاعدة من الصفر: createdb → `schema.sql` → `seed.sql`. بعد أي migration جديد: طبّقه ثم أعد تصدير schema.sql.
-- [ ] 0.3 React Router + Layout عربي RTL + قائمة جانبية حسب الدور
+- [x] 0.3 React Router + Layout عربي RTL + قائمة جانبية حسب الدور + انتهاء الجلسة بعد 30 دقيقة خمول (FR-AUTH-02 من جهة الواجهة)
 - [ ] AUTH: الأدوار والنطاق وعزل النطاق في كل استعلام (03, 04, 06)، انتهاء الجلسة 30 دقيقة (02)، إنشاء المستخدمين (05)
 - [ ] AUTH-07/08/10: سجل تدقيق (جدول append-only)
 - [ ] DATA-01..08: CRUD مدارس، معلمين، إداريين، طلاب، صفوف/شعب/مواد، سنة دراسية
@@ -78,9 +86,13 @@
 ## مشاكل معروفة (للإصلاح لاحقاً)
 - التقرير الشهري يحسب الأيام المستقبلية من الشهر الحالي كـ "بدون سجل حضور" → يجب قصّ الفترة حتى اليوم (أسبوع 4 - RPT).
 - `GET /api/requests` غير موجود؛ الموجود `/api/requests/directorate` فقط.
+- `/api/reports/*` بدون مصادقة بالـ backend، و`MonthlyReport.tsx` يستخدم fetch مباشر (لازم apiFetch) → ضمن مهمة AUTH-04/06.
+- صفحة مراجعة الطلبات لا تعرض اسم الحالة لـ APPROVED/IN_PROGRESS/COMPLETED/REJECTED (فارغة).
+- الحماية حسب الدور حالياً بالواجهة فقط؛ الـ backend لازم يفرضها (المهمة التالية).
 
 ## سجل التقدم
 - 2026-11-13: إنشاء الخطة وهذا الملف.
 - 2026-11-13: المهمة 0.1 + تصدير schema.sql. التالي: 0.2b seed.sql ثم 0.3 Router.
 - 2026-11-13: seed generator جاهز ومُختبر. ملاحظة: أقصى نصاب منفّذ بالبرنامج 18 من 22 (مقصود — يظهر "متبقي" بالتقارير).
 - 2026-11-13: school_pilot جاهزة، login + التقريرين مُختبرين عبر API. إصلاح: التقرير الشهري الملخّص كان يرجع فاضي لما `timetables.effective_to = NULL`. التالي: 0.3 Router + Layout.
+- 2026-11-13: git repo جديد للمشروع. 0.3 خلص ومُختبر بالمتصفح (directorate.admin يشوف الطلبات، t1005 ممنوع منها). التالي: AUTH بالـ backend (أدوار + عزل النطاق + سجل التدقيق).

@@ -763,3 +763,17 @@ input {
         box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
     }
 }
+/* ===== App shell (MainLayout) ===== */
+.app-shell { min-height: 100vh; background: #f4f6f9; display: flex; flex-direction: column; }
+.app-topbar { background-color: #102a43; position: sticky; top: 0; z-index: 1030; }
+.app-body { display: flex; flex: 1; min-height: 0; }
+.app-sidebar { width: 240px; flex-shrink: 0; background: #fff; border-inline-start: 1px solid #e3e8ef; }
+.app-sidebar-mobile { position: fixed; top: 56px; bottom: 0; right: 0; z-index: 1040; box-shadow: 0 0 24px rgba(0,0,0,.15); }
+.sidebar-backdrop { position: fixed; inset: 56px 0 0 0; background: rgba(16,42,67,.35); z-index: 1035; }
+.app-content { flex: 1; min-width: 0; }
+.sidebar-link { display: flex; align-items: center; gap: .6rem; padding: .6rem .85rem; border-radius: .6rem; color: #334e68; text-decoration: none; font-weight: 500; }
+.sidebar-link:hover { background: #eef3f8; color: #102a43; }
+.sidebar-link.active { background: #102a43; color: #fff; }
+.service-card { transition: transform .15s, box-shadow .15s; }
+.service-card:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(16,42,67,.12) !important; }
+@media print { .app-sidebar, .app-topbar { display: none !important; } }
