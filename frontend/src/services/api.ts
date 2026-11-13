@@ -27,9 +27,11 @@ export function setToken(token: string | null) {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  body: Record<string, unknown> | null;
+  constructor(status: number, message: string, body: Record<string, unknown> | null = null) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -53,7 +55,7 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
 
   if (response.status === 401 && token) onUnauthorized?.();
   if (!response.ok || body?.success === false) {
-    throw new ApiError(response.status, body?.message ?? "حدث خطأ غير متوقع");
+    throw new ApiError(response.status, body?.message ?? "حدث خطأ غير متوقع", body);
   }
   return body as T;
 }

@@ -18,6 +18,8 @@
 
 ## بنية الكود (مختصر)
 - `backend/src/app.ts` — تسجيل المسارات: `/api/auth`, `/api/reports`, `/api/requests`, `/api/health`
+- `backend/src/utils/http.ts` — `handle()` يلف الـ handlers (HttpError → status، تكرار pg → 409)، و`requireString/requireId/optionalDate`. **استخدمه بكل route جديد.**
+- `scope.service.ts`: `readableSchoolIds(user)` و`resolveReadableSchool(user, ?schoolId)` للقراءة حسب النطاق.
 - `backend/src/routes/*` → `services/*` (منطق + SQL). كل route محمي: `authenticateToken` ثم `requireRole(...)`، وبيانات الأشخاص تمر عبر `scope.service.ts`، والاطلاع/التعديل يُسجّل بـ `audit()`.
 - JWT فيه: id, role, employeeId, schoolId, directorateId. والـ login يرجّع كمان employeeNumber.
 - قواعد النطاق: TEACHER نفسه فقط، PRINCIPAL/DEPUTY مدرستهم، DIRECTORATE مدارس مديريتها، MINISTRY مجمّع فقط (بدون أفراد)، STAFF لا شيء.
@@ -27,6 +29,8 @@
   - `services/api.ts` — `apiFetch(path)` يضيف JWT ويرمي `ApiError` بالرسالة العربية؛ 401 → خروج تلقائي. **استخدمه لكل طلب جديد.**
   - `layouts/MainLayout.tsx` — شريط علوي + قائمة جانبية (منسدلة على الموبايل). الأنماط بآخر `index.css`.
   - `types/auth.ts` — Role, AuthUser, roleLabels.
+  - `hooks/useApi.ts` — `useApi<T>(path|null)` → { data, loading, error, reload } للقراءة. للكتابة استخدم apiFetch مباشرة.
+  - `components/ui.tsx` — PageHeader, Alert, Loading, Field, SchoolPicker (للمديرية/الوزارة)، DuplicateWarning.
   - pages: LoginPage, HomePage, DirectorateRequests, MonthlyReport.
 - التشغيل: `.claude/launch.json` فيه backend (5000) و frontend (5173).
 - Git: repo خاص بالمشروع، فرع `main`. `.env` غير مرفوع (انظر `backend/.env.example`).
@@ -53,9 +57,14 @@
 - [x] 0.3 React Router + Layout عربي RTL + قائمة جانبية حسب الدور + انتهاء الجلسة بعد 30 دقيقة خمول (FR-AUTH-02 من جهة الواجهة)
 - [x] AUTH-03/04/06: `requireRole(...)` بـ `middleware/auth.middleware.ts` + `services/scope.service.ts` (`assertCanViewEmployee`). مطبّق على التقارير والطلبات. مُختبر بـ 11 حالة.
 - [x] AUTH-07/08/10: جدول `audit_logs` (migration 002) غير قابل للتعديل/الحذف بـ trigger. `audit()` بـ `services/audit.service.ts` يسجّل: LOGIN, LOGIN_FAILED, ACCESS_DENIED, VIEW_TEACHER_REPORT, REQUEST_STATUS_CHANGE.
-- [ ] AUTH-05: إنشاء المستخدمين من الواجهة (مع DATA)
+- [x] AUTH-05: صفحة `/users` + `routes/users.routes.ts`. الوزارة تنشئ كل الأدوار، المديرية تنشئ مدراء مدارسها، المدير ينشئ نائب/موظف/معلم (المعلم لازم يُربط بملف معلم).
 - [ ] AUTH-02 من جهة الخادم: JWT حالياً 8 ساعات؛ الخمول 30 دقيقة مطبّق بالواجهة فقط
-- [ ] DATA-01..08: CRUD مدارس، معلمين، إداريين، طلاب، صفوف/شعب/مواد، سنة دراسية
+- [x] DATA-01: `/schools` (الوزارة كل المديريات، المديرية مدارسها فقط)
+- [x] DATA-02/03: `/staff` + `routes/employees.routes.ts` — الإضافة والتعديل للمدير فقط، النائب والمديرية قراءة فقط (DATA-11)
+- [x] DATA-04/05/08: `/students` + `routes/academics.routes.ts` — صفوف وشعب السنة الحالية، أسماء طلاب كل شعبة، إضافة/تعديل طالب (المدير والنائب)
+- [x] DATA-06: تحذير التكرار (409 + `duplicates`) للموظفين والطلاب، والواجهة تعرض "متابعة رغم ذلك" (`confirmDuplicate: true`)
+- [ ] DATA-07: إدخال النتائج (الموجّه) واعتمادها (المدير) — مؤجّل، يحتاج دور "موجّه" غير موجود حالياً
+- [ ] إدارة المواد من الواجهة (حالياً GET فقط، المواد تأتي من seed)
 
 ### الأسبوع 2 (11-20 → 11-26): الجداول + الحضور
 - [ ] SCH-01, 04..11: جدول الحصص، النصاب، الإجازات، عرض جدول المعلم
@@ -88,6 +97,7 @@
 - لا يوجد حالياً
 
 ## مشاكل معروفة (للإصلاح لاحقاً)
+- DATA-07 (النتائج) يحتاج قرار: دور "موجّه" جديد؟ (اسأل المستخدم)
 - التقرير الشهري يحسب الأيام المستقبلية من الشهر الحالي كـ "بدون سجل حضور" → يجب قصّ الفترة حتى اليوم (أسبوع 4 - RPT).
 - `GET /api/requests` غير موجود؛ الموجود `/api/requests/directorate` فقط.
 - صفحة مراجعة الطلبات لا تعرض اسم الحالة لـ APPROVED/IN_PROGRESS/COMPLETED/REJECTED (فارغة).
@@ -100,3 +110,4 @@
 - 2026-11-13: school_pilot جاهزة، login + التقريرين مُختبرين عبر API. إصلاح: التقرير الشهري الملخّص كان يرجع فاضي لما `timetables.effective_to = NULL`. التالي: 0.3 Router + Layout.
 - 2026-11-13: git repo جديد للمشروع. 0.3 خلص ومُختبر بالمتصفح (directorate.admin يشوف الطلبات، t1005 ممنوع منها). التالي: AUTH بالـ backend (أدوار + عزل النطاق + سجل التدقيق).
 - 2026-11-13: AUTH backend خلص (أدوار، نطاق، سجل تدقيق). التالي: DATA-01..08 (CRUD مدارس/معلمين/طلاب/صفوف) + AUTH-05.
+- 2026-11-13: DATA + AUTH-05 خلصوا (4 صفحات جديدة). مُختبر: 20 حالة API + المتصفح (principal1: الكادر، الصفوف، تحذير التكرار). ملاحظة: اختبار curl من Git Bash يخرب العربي — استخدم المتصفح أو ملف JSON بـ UTF-8. **الأسبوع 1 خلص تقريباً قبل موعده.** التالي: الأسبوع 2 — جداول الحصص SCH.

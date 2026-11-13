@@ -6,6 +6,10 @@ import helmet from "helmet";
 import reportsRoutes from "./routes/reports.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import requestsRoutes from "./routes/requests.routes.js";
+import schoolsRoutes from "./routes/schools.routes.js";
+import employeesRoutes from "./routes/employees.routes.js";
+import academicsRoutes from "./routes/academics.routes.js";
+import usersRoutes from "./routes/users.routes.js";
 
 const app = express();
 
@@ -26,6 +30,10 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/requests", requestsRoutes);
+app.use("/api/schools", schoolsRoutes);
+app.use("/api/employees", employeesRoutes);
+app.use("/api/academics", academicsRoutes);
+app.use("/api/users", usersRoutes);
 
 // Test route
 app.get("/api/health", (req, res) => {

@@ -6,7 +6,11 @@ export type AuditAction =
   | "LOGIN_FAILED"
   | "ACCESS_DENIED"
   | "VIEW_TEACHER_REPORT"
-  | "REQUEST_STATUS_CHANGE";
+  | "REQUEST_STATUS_CHANGE"
+  | "DATA_CREATE"
+  | "DATA_UPDATE"
+  | "USER_CREATE"
+  | "USER_UPDATE";
 
 interface AuditEntry {
   userId: number | null;

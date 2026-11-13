@@ -51,3 +51,30 @@ export async function assertCanViewEmployee(
   if (!allowed) throw new ScopeError("لا تملك صلاحية الاطلاع على بيانات هذا الموظف");
   return emp;
 }
+
+/**
+ * Which school ids may this user READ? (FR-DATA-11: directorate reads all its schools.)
+ * Returns null for "all schools" (ministry).
+ */
+export async function readableSchoolIds(user: AuthenticatedUser): Promise<number[] | null> {
+  if (user.role === "MINISTRY_ADMIN") return null;
+  if (user.role === "DIRECTORATE_ADMIN") {
+    const r = await pool.query<{ id: string }>(
+      "SELECT id FROM schools WHERE directorate_id = $1",
+      [user.directorateId]
+    );
+    return r.rows.map((x) => Number(x.id));
+  }
+  return user.schoolId ? [user.schoolId] : [];
+}
+
+/** Resolve ?schoolId for a read: default to the user's own school; reject out-of-scope ids. */
+export async function resolveReadableSchool(user: AuthenticatedUser, requested: unknown): Promise<number> {
+  const allowed = await readableSchoolIds(user);
+  const id = requested != null && requested !== "" ? Number(requested) : user.schoolId;
+  if (!id || !Number.isInteger(id)) throw new ScopeError("يرجى اختيار المدرسة", 400);
+  if (allowed !== null && !allowed.includes(id)) {
+    throw new ScopeError("لا تملك صلاحية الاطلاع على بيانات هذه المدرسة");
+  }
+  return id;
+}
