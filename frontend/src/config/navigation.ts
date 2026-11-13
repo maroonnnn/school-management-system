@@ -39,6 +39,13 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
   },
   {
+    path: "/grades",
+    label: "النتائج",
+    icon: "bi-journal-check",
+    description: "إدخال علامات الطلاب من الموجّه واعتمادها من مدير المدرسة.",
+    roles: ["SUPERVISOR", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "DIRECTORATE_ADMIN"],
+  },
+  {
     path: "/users",
     label: "الحسابات",
     icon: "bi-person-gear",

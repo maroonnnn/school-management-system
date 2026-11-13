@@ -66,6 +66,7 @@ insert("roles", ["id", "name", "description"], [
     (4, "SCHOOL_DEPUTY", "نائب مدير المدرسة"),
     (5, "SCHOOL_STAFF", "موظف المدرسة"),
     (6, "TEACHER", "معلم"),
+    (7, "SUPERVISOR", "موجّه"),
 ])
 
 insert("academic_years", ["id", "name", "start_date", "end_date", "is_current"],
@@ -109,6 +110,8 @@ classes, sections, students, enrollments = [], [], [], []
 teaching, timetables, periods, users = [], [], [], []
 all_staff = []  # (ea_id, position)
 school_users = {}
+supervisor_users = {}
+section_enrollments = {}  # section_id -> [enrollment ids]
 
 users.append((nid("user"), 1, 1, None, None, "مسؤول الوزارة", "ministry.admin", "ministry@example.test", PWD_HASH, None))
 dir_user = nid("user")
@@ -135,6 +138,7 @@ for school_id, _, _, _ in SCHOOLS:
     _, principal_name, principal_emp = new_employee("PRINCIPAL")
     _, deputy_name, deputy_emp = new_employee("DEPUTY")
     admin_emps = [new_employee("ADMINISTRATIVE") for _ in range(2)]
+    _, sup_name, sup_emp = new_employee("SUPERVISOR")
     teachers = []  # (ea_id, subjects)
     for spec, subs in TEACHER_TEMPLATES:
         ea, t_name, t_emp = new_employee("TEACHER", 22, spec)
@@ -146,8 +150,10 @@ for school_id, _, _, _ in SCHOOLS:
         (p_user, 3, None, None, school_id, principal_name, f"principal{school_id}", f"principal{school_id}@example.test", PWD_HASH, principal_emp),
         (d_user, 4, None, None, school_id, deputy_name, f"deputy{school_id}", f"deputy{school_id}@example.test", PWD_HASH, deputy_emp),
         (s_user, 5, None, None, school_id, admin_emps[0][1], f"staff{school_id}", f"staff{school_id}@example.test", PWD_HASH, admin_emps[0][2]),
+        (nid("user"), 7, None, None, school_id, sup_name, f"supervisor{school_id}", f"supervisor{school_id}@example.test", PWD_HASH, sup_emp),
     ]
     school_users[school_id] = (p_user, d_user)
+    supervisor_users[school_id] = users[-1][0]
 
     # classes 7..9, sections أ / ب
     school_sections = []
@@ -163,7 +169,9 @@ for school_id, _, _, _ in SCHOOLS:
                 st = nid("stu")
                 students.append((st, f"STU-{stu_no}", person(), date(2026 - grade - 6, random.randint(1, 12), random.randint(1, 28)),
                                  f"{random.choice(FIRST_M)} {random.choice(LAST)}", f"09{random.randint(30000000, 99999999)}"))
-                enrollments.append((nid("enr"), st, s, YEAR_START))
+                enr = nid("enr")
+                enrollments.append((enr, st, s, YEAR_START))
+                section_enrollments.setdefault(s, []).append(enr)
 
     # teaching assignments: split each subject's sections between its teachers
     teacher_busy = {ea: set() for ea, _ in teachers}
@@ -277,6 +285,25 @@ for school_id, _, _, _ in SCHOOLS:
 insert("school_requests", ["id", "request_number", "school_id", "created_by", "request_type", "title", "description", "status", "submitted_at", "created_at"], req_rows)
 insert("request_status_history", ["request_id", "old_status", "new_status", "changed_by", "notes", "changed_at"],
        [(r, o, n, b, note, t.strftime("%Y-%m-%d %H:%M:%S") + "+03") for r, o, n, b, note, t in hist_rows])
+
+# ---------------- results (FR-DATA-07): one approved + one draft assessment per school ----------------
+assessments, grade_rows, approve_sql = [], [], []
+for school_id, _, _, _ in SCHOOLS:
+    sup, principal = supervisor_users[school_id], school_users[school_id][0]
+    first_sections = sorted({ta[2] for ta in teaching if next(a[2] for a in assignments if a[0] == ta[1]) == school_id})[:2]
+    for k, sec in enumerate(first_sections):
+        ta = next(t for t in teaching if t[2] == sec and t[3] == 2)  # math
+        aid = len(assessments) + 1
+        assessments.append((aid, ta[0], "مذاكرة الرياضيات الأولى", "QUIZ", date(2026, 10, 20), 20, sup))
+        for enr in section_enrollments[sec]:
+            grade_rows.append((aid, enr, round(random.uniform(8, 20) * 2) / 2, sup))
+        if k == 0:
+            approve_sql.append(
+                f"UPDATE assessments SET status='APPROVED', submitted_at='2026-10-22 10:00+03', "
+                f"approved_by={principal}, approved_at='2026-10-23 09:00+03' WHERE id={aid};")
+insert("assessments", ["id", "teaching_assignment_id", "title", "assessment_type", "assessment_date", "max_score", "created_by"], assessments)
+insert("grades", ["assessment_id", "enrollment_id", "score", "recorded_by"], grade_rows)
+sql.extend(approve_sql)
 
 # ---------------- write ----------------
 seq_fix = """

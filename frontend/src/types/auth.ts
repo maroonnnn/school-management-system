@@ -4,7 +4,8 @@ export type Role =
   | "SCHOOL_PRINCIPAL"
   | "SCHOOL_DEPUTY"
   | "SCHOOL_STAFF"
-  | "TEACHER";
+  | "TEACHER"
+  | "SUPERVISOR";
 
 export interface AuthUser {
   id: number;
@@ -23,4 +24,5 @@ export const roleLabels: Record<Role, string> = {
   SCHOOL_DEPUTY: "نائب مدير المدرسة",
   SCHOOL_STAFF: "موظف المدرسة",
   TEACHER: "معلم",
+  SUPERVISOR: "موجّه",
 };

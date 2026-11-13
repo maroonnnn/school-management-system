@@ -12,11 +12,11 @@ router.use(authenticateToken, requireRole("MINISTRY_ADMIN", "DIRECTORATE_ADMIN",
 
 /** Which roles may each manager create? */
 const CREATABLE: Record<string, Role[]> = {
-  MINISTRY_ADMIN: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER"],
+  MINISTRY_ADMIN: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER", "SUPERVISOR"],
   DIRECTORATE_ADMIN: ["SCHOOL_PRINCIPAL"],
-  SCHOOL_PRINCIPAL: ["SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER"],
+  SCHOOL_PRINCIPAL: ["SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER", "SUPERVISOR"],
 };
-const SCHOOL_ROLES: Role[] = ["SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER"];
+const SCHOOL_ROLES: Role[] = ["SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF", "TEACHER", "SUPERVISOR"];
 
 /** SQL filter limiting visible/manageable users to the manager's scope. */
 async function scopeFilter(u: AuthenticatedUser): Promise<{ sql: string; params: unknown[] }> {

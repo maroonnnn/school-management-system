@@ -9,7 +9,8 @@ export type Role =
   | "SCHOOL_PRINCIPAL"
   | "SCHOOL_DEPUTY"
   | "SCHOOL_STAFF"
-  | "TEACHER";
+  | "TEACHER"
+  | "SUPERVISOR";
 
 export interface AuthenticatedUser {
   id: number;

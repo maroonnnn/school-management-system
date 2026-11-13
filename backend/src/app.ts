@@ -10,6 +10,7 @@ import schoolsRoutes from "./routes/schools.routes.js";
 import employeesRoutes from "./routes/employees.routes.js";
 import academicsRoutes from "./routes/academics.routes.js";
 import usersRoutes from "./routes/users.routes.js";
+import gradesRoutes from "./routes/grades.routes.js";
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use("/api/schools", schoolsRoutes);
 app.use("/api/employees", employeesRoutes);
 app.use("/api/academics", academicsRoutes);
 app.use("/api/users", usersRoutes);
+app.use("/api/grades", gradesRoutes);
 
 // Test route
 app.get("/api/health", (req, res) => {

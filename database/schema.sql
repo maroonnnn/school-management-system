@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9XOb6sydYJEClpCscnncditptX2jBhxWCwkJA6FAfumkDRb5sV4g6uIOluNidBM
+\restrict 9Fyc0zRBwdyfVTckfCKddkHQvBcgIA2WNkh7iMnORl2bYzCMmI63ydHai8S0Bfe
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -20,15 +20,34 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: prevent_approved_grade_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_approved_grade_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_status varchar(20);
+BEGIN
+    SELECT status INTO v_status FROM assessments
+     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
+    IF v_status = 'APPROVED' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+--
 -- Name: prevent_audit_log_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
 $$;
 
 
@@ -38,45 +57,45 @@ $$;
 
 CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE
-    v_last_event_type VARCHAR(10);
-    v_last_event_time TIMESTAMPTZ;
-BEGIN
-    -- منع إدخال حركتين متزامنتين لنفس الموظف
-    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
-
-    -- جلب آخر حركة مسجلة للموظف
-    SELECT event_type, event_time
-    INTO v_last_event_type, v_last_event_time
-    FROM attendance_events
-    WHERE employee_assignment_id = NEW.employee_assignment_id
-    ORDER BY event_time DESC, id DESC
-    LIMIT 1;
-
-    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
-    IF NOT FOUND THEN
-        IF NEW.event_type <> 'IN' THEN
-            RAISE EXCEPTION
-                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
-        END IF;
-
-    ELSE
-        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
-        IF NEW.event_time <= v_last_event_time THEN
-            RAISE EXCEPTION
-                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
-        END IF;
-
-        -- منع تكرار نوع الحركة
-        IF NEW.event_type = v_last_event_type THEN
-            RAISE EXCEPTION
-                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
+    AS $$
+DECLARE
+    v_last_event_type VARCHAR(10);
+    v_last_event_time TIMESTAMPTZ;
+BEGIN
+    -- منع إدخال حركتين متزامنتين لنفس الموظف
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+
+    -- جلب آخر حركة مسجلة للموظف
+    SELECT event_type, event_time
+    INTO v_last_event_type, v_last_event_time
+    FROM attendance_events
+    WHERE employee_assignment_id = NEW.employee_assignment_id
+    ORDER BY event_time DESC, id DESC
+    LIMIT 1;
+
+    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
+    IF NOT FOUND THEN
+        IF NEW.event_type <> 'IN' THEN
+            RAISE EXCEPTION
+                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
+        END IF;
+
+    ELSE
+        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
+        IF NEW.event_time <= v_last_event_time THEN
+            RAISE EXCEPTION
+                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
+        END IF;
+
+        -- منع تكرار نوع الحركة
+        IF NEW.event_type = v_last_event_type THEN
+            RAISE EXCEPTION
+                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
 $$;
 
 
@@ -125,7 +144,15 @@ CREATE TABLE public.assessments (
     assessment_date date NOT NULL,
     max_score numeric(7,2) NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT chk_assessment_max_score CHECK ((max_score > (0)::numeric))
+    status character varying(20) DEFAULT 'DRAFT'::character varying NOT NULL,
+    created_by bigint,
+    submitted_at timestamp with time zone,
+    approved_by bigint,
+    approved_at timestamp with time zone,
+    return_note text,
+    CONSTRAINT chk_assessment_approval CHECK ((((status)::text <> 'APPROVED'::text) OR ((approved_by IS NOT NULL) AND (approved_at IS NOT NULL)))),
+    CONSTRAINT chk_assessment_max_score CHECK ((max_score > (0)::numeric)),
+    CONSTRAINT chk_assessment_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'APPROVED'::character varying])::text[])))
 );
 
 
@@ -1357,10 +1384,33 @@ CREATE TRIGGER trg_audit_logs_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON p
 
 
 --
+-- Name: grades trg_grades_frozen_after_approval; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_grades_frozen_after_approval BEFORE INSERT OR DELETE OR UPDATE ON public.grades FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_grade_change();
+
+
+--
 -- Name: attendance_events trg_validate_attendance_sequence; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_validate_attendance_sequence BEFORE INSERT ON public.attendance_events FOR EACH ROW EXECUTE FUNCTION public.validate_attendance_sequence();
+
+
+--
+-- Name: assessments assessments_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessments
+    ADD CONSTRAINT assessments_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+
+
+--
+-- Name: assessments assessments_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.assessments
+    ADD CONSTRAINT assessments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
 
 
 --
@@ -1679,5 +1729,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9XOb6sydYJEClpCscnncditptX2jBhxWCwkJA6FAfumkDRb5sV4g6uIOluNidBM
+\unrestrict 9Fyc0zRBwdyfVTckfCKddkHQvBcgIA2WNkh7iMnORl2bYzCMmI63ydHai8S0Bfe
 

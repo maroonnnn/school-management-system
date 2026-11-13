@@ -1,6 +1,10 @@
 
-import { Pool } from "pg";
+import pg, { Pool } from "pg";
 import "dotenv/config";
+
+// Return DATE columns as plain "YYYY-MM-DD" strings. Otherwise pg builds a local-midnight JS Date
+// that serializes to the previous day in UTC (off-by-one dates in the UI).
+pg.types.setTypeParser(pg.types.builtins.DATE, (value: string) => value);
 
 const pool = new Pool({
   host: process.env.DB_HOST,

@@ -11,7 +11,7 @@ interface Employee {
   phone: string | null;
   email: string | null;
   hire_date: string | null;
-  position_type: "TEACHER" | "PRINCIPAL" | "DEPUTY" | "ADMINISTRATIVE";
+  position_type: "TEACHER" | "PRINCIPAL" | "DEPUTY" | "ADMINISTRATIVE" | "SUPERVISOR";
   weekly_quota_units: string | null;
   specialization: string | null;
   qualification: string | null;
@@ -20,7 +20,7 @@ interface Employee {
 }
 
 const POSITION_LABELS: Record<string, string> = {
-  TEACHER: "معلم", PRINCIPAL: "مدير", DEPUTY: "نائب مدير", ADMINISTRATIVE: "إداري",
+  TEACHER: "معلم", PRINCIPAL: "مدير", DEPUTY: "نائب مدير", ADMINISTRATIVE: "إداري", SUPERVISOR: "موجّه",
 };
 
 const empty = {
@@ -107,6 +107,7 @@ function StaffPage() {
                 <option value="TEACHER">معلم</option>
                 <option value="ADMINISTRATIVE">إداري</option>
                 <option value="DEPUTY">نائب مدير</option>
+                <option value="SUPERVISOR">موجّه</option>
               </select>
             </Field>
             <Field label="الرقم الوظيفي" col="col-md-3">

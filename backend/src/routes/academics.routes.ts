@@ -10,7 +10,7 @@ import { HttpError, handle, optionalDate, optionalString, requireId, requireStri
 const router = Router();
 router.use(authenticateToken);
 
-const READERS = requireRole("DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY");
+const READERS = requireRole("DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SUPERVISOR");
 const WRITERS = requireRole("SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY");
 
 async function currentYear(): Promise<{ id: number; name: string }> {

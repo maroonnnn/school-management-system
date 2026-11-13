@@ -10,7 +10,7 @@ import { HttpError, handle, optionalDate, optionalString, requireId, requireStri
 const router = Router();
 router.use(authenticateToken);
 
-const POSITIONS = ["TEACHER", "DEPUTY", "ADMINISTRATIVE"] as const;
+const POSITIONS = ["TEACHER", "DEPUTY", "ADMINISTRATIVE", "SUPERVISOR"] as const;
 type Position = (typeof POSITIONS)[number];
 
 const SELECT = `
