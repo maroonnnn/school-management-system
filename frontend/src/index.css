@@ -777,3 +777,10 @@ input {
 .service-card { transition: transform .15s, box-shadow .15s; }
 .service-card:hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(16,42,67,.12) !important; }
 @media print { .app-sidebar, .app-topbar { display: none !important; } }
+
+/* ===== Timetable grid ===== */
+.timetable-grid td { min-width: 110px; height: 64px; font-size: .85rem; }
+.timetable-cell { border-radius: .5rem; padding: .3rem .4rem; line-height: 1.25; }
+.timetable-cell.editable { cursor: pointer; }
+.timetable-cell.editable:hover { outline: 2px solid #176b87; }
+.timetable-cell.empty { color: #9aa5b1; border: 1px dashed #cbd2d9; }

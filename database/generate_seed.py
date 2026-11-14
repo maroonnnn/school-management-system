@@ -263,6 +263,23 @@ insert("timetable_periods", ["id", "timetable_id", "teaching_assignment_id", "se
 insert("school_deputy_authorizations", ["school_id", "deputy_user_id", "authorized_by"],
        [(sid, d, p) for sid, (p, d) in school_users.items() if sid in (1, 2)])
 
+# ---------------- leaves (FR-SCH-09): 2 teachers per school, 2 past working days each ----------------
+work_dates = [TODAY - timedelta(days=i) for i in range(1, 25) if (TODAY - timedelta(days=i)).weekday() in (6, 0, 1, 2, 3)]
+LEAVE_KINDS = [("SICK", "إجازة مرضية"), ("OFFICIAL_ASSIGNMENT", "تكليف رسمي: دورة تدريبية بالمديرية")]
+leave_rows, on_leave = [], set()  # on_leave: (employee_id, date)
+for school_id, _, _, _ in SCHOOLS:
+    school_teachers = [a for a in assignments if a[2] == school_id and a[3] == "TEACHER"
+                       and teacher_profile_by_emp[a[1]][4] == "PERMANENT"]
+    for k, a in enumerate(random.sample(school_teachers, 2)):
+        start = random.choice(work_dates[2:])
+        end = start + timedelta(days=1) if start.weekday() != 3 else start
+        kind, note = LEAVE_KINDS[k]
+        leave_rows.append((a[1], kind, start, end, note, school_users[school_id][0]))
+        d = start
+        while d <= end:
+            on_leave.add((a[1], d))
+            d += timedelta(days=1)
+
 # ---------------- attendance: last 4 weeks of working days ----------------
 contract_eas = {a[0] for a in assignments
                 if a[3] == "TEACHER" and a[1] in teacher_profile_by_emp and teacher_profile_by_emp[a[1]][4] == "CONTRACT"}
@@ -277,8 +294,8 @@ while day <= TODAY:
         dow = (day.weekday() + 1) % 7 + 1  # Sun=1 .. Thu=5
         for ea, pos in all_staff:
             r = random.random()
-            if r < 0.04:
-                continue  # absent
+            if r < 0.04 or (ea_emp.get(ea), day) in on_leave:
+                continue  # absent / on leave
             if ea in contract_eas:
                 # contract teachers come only on days they teach at this school, around their lessons
                 todays = sorted(lesson_slots.get(ea, {}).get(dow, []))
@@ -344,6 +361,17 @@ for school_id, _, _, _ in SCHOOLS:
 insert("school_requests", ["id", "request_number", "school_id", "created_by", "request_type", "title", "description", "status", "submitted_at", "created_at"], req_rows)
 insert("request_status_history", ["request_id", "old_status", "new_status", "changed_by", "notes", "changed_at"],
        [(r, o, n, b, note, t.strftime("%Y-%m-%d %H:%M:%S") + "+03") for r, o, n, b, note, t in hist_rows])
+
+insert("employee_leaves", ["employee_id", "leave_type", "start_date", "end_date", "notes", "created_by"], leave_rows)
+
+# ---------------- lesson log (FR-SCH-08): one compensated lesson per school ----------------
+lesson_exec_rows = []
+for school_id, _, _, _ in SCHOOLS:
+    sec_ids = {s[0] for s in sections if next(c for c in classes if c[0] == s[1])[1] == school_id}
+    p = next(p for p in periods if p[3] in sec_ids)
+    d = next(x for x in work_dates[3:] if (x.weekday() + 1) % 7 + 1 == p[4])
+    lesson_exec_rows.append((p[0], d, "COMPENSATED", "عُوّضت بحصة إضافية يوم السبت", school_users[school_id][0]))
+insert("lesson_executions", ["timetable_period_id", "lesson_date", "status", "notes", "recorded_by"], lesson_exec_rows)
 
 # ---------------- results (FR-DATA-07): one approved + one draft assessment per school ----------------
 assessments, grade_rows, approve_sql = [], [], []

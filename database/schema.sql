@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict mmmNd3ubL5C0ogRKZGpm0KNJAeObQne2aY9shxAgEWDIjs1gAl2fnaliYa2WJY6
+\restrict k5Vrz1RPCcuAaClphISoLbLuEHybvI2ul1QpsKUk3m8eFkqrBIdzssi8aMYDnXS
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -172,6 +172,24 @@ $$;
 
 
 --
+-- Name: validate_period_duration(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_period_duration() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_minutes int;
+BEGIN
+    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
+    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
+        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: validate_school_stage_change(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -202,6 +220,35 @@ BEGIN
         RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
     ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
         RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: validate_teacher_slot(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_teacher_slot() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_emp bigint; v_clash text;
+BEGIN
+    SELECT ea.employee_id INTO v_emp
+      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+     WHERE ta.id = NEW.teaching_assignment_id;
+    SELECT c.name || ' / ' || sc.name INTO v_clash
+      FROM timetable_periods tp
+      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
+      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
+      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
+     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
+       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
+     LIMIT 1;
+    IF v_clash IS NOT NULL THEN
+        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
     END IF;
     RETURN NEW;
 END;
@@ -453,6 +500,38 @@ ALTER TABLE public.employee_assignments ALTER COLUMN id ADD GENERATED ALWAYS AS 
 
 
 --
+-- Name: employee_leaves; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.employee_leaves (
+    id bigint NOT NULL,
+    employee_id bigint NOT NULL,
+    leave_type character varying(30) NOT NULL,
+    start_date date NOT NULL,
+    end_date date NOT NULL,
+    notes text,
+    created_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_leave_dates CHECK ((end_date >= start_date)),
+    CONSTRAINT chk_leave_type CHECK (((leave_type)::text = ANY ((ARRAY['ANNUAL'::character varying, 'SICK'::character varying, 'OFFICIAL_ASSIGNMENT'::character varying, 'TRAINING'::character varying, 'OTHER'::character varying])::text[])))
+);
+
+
+--
+-- Name: employee_leaves_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.employee_leaves ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.employee_leaves_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: employees; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -505,6 +584,36 @@ CREATE TABLE public.grades (
 
 ALTER TABLE public.grades ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.grades_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: lesson_executions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lesson_executions (
+    id bigint NOT NULL,
+    timetable_period_id bigint NOT NULL,
+    lesson_date date NOT NULL,
+    status character varying(20) NOT NULL,
+    notes text,
+    recorded_by bigint NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_lesson_status CHECK (((status)::text = ANY ((ARRAY['EXECUTED'::character varying, 'NOT_EXECUTED'::character varying, 'COMPENSATED'::character varying])::text[])))
+);
+
+
+--
+-- Name: lesson_executions_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lesson_executions ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.lesson_executions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -926,7 +1035,6 @@ CREATE TABLE public.timetable_periods (
     end_time time without time zone NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT chk_period_day CHECK (((day_of_week >= 1) AND (day_of_week <= 7))),
-    CONSTRAINT chk_period_duration CHECK (((end_time - start_time) = '00:45:00'::interval)),
     CONSTRAINT chk_period_number CHECK ((period_number > 0))
 );
 
@@ -1098,6 +1206,14 @@ ALTER TABLE ONLY public.employee_assignments
 
 
 --
+-- Name: employee_leaves employee_leaves_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_leaves
+    ADD CONSTRAINT employee_leaves_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: employees employees_employee_number_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1119,6 +1235,14 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.grades
     ADD CONSTRAINT grades_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lesson_executions lesson_executions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_executions
+    ADD CONSTRAINT lesson_executions_pkey PRIMARY KEY (id);
 
 
 --
@@ -1314,6 +1438,14 @@ ALTER TABLE ONLY public.directorates
 
 
 --
+-- Name: lesson_executions uq_lesson_execution; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_executions
+    ADD CONSTRAINT uq_lesson_execution UNIQUE (timetable_period_id, lesson_date);
+
+
+--
 -- Name: schools uq_school_name; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1498,6 +1630,13 @@ CREATE INDEX idx_grades_enrollment ON public.grades USING btree (enrollment_id);
 
 
 --
+-- Name: idx_leaves_employee_dates; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_leaves_employee_dates ON public.employee_leaves USING btree (employee_id, start_date, end_date);
+
+
+--
 -- Name: idx_period_timetable; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1582,6 +1721,13 @@ CREATE TRIGGER trg_grades_frozen_after_approval BEFORE INSERT OR DELETE OR UPDAT
 
 
 --
+-- Name: timetable_periods trg_period_duration; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_period_duration BEFORE INSERT OR UPDATE OF start_time, end_time ON public.timetable_periods FOR EACH ROW EXECUTE FUNCTION public.validate_period_duration();
+
+
+--
 -- Name: schools trg_school_stage_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1593,6 +1739,13 @@ CREATE TRIGGER trg_school_stage_change BEFORE UPDATE OF stage ON public.schools 
 --
 
 CREATE TRIGGER trg_section_track BEFORE INSERT OR UPDATE OF track, class_id ON public.sections FOR EACH ROW EXECUTE FUNCTION public.validate_section_track();
+
+
+--
+-- Name: timetable_periods trg_teacher_slot; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_teacher_slot BEFORE INSERT OR UPDATE OF teaching_assignment_id, day_of_week, period_number ON public.timetable_periods FOR EACH ROW EXECUTE FUNCTION public.validate_teacher_slot();
 
 
 --
@@ -1656,6 +1809,22 @@ ALTER TABLE ONLY public.employee_assignments
 
 ALTER TABLE ONLY public.employee_assignments
     ADD CONSTRAINT employee_assignments_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: employee_leaves employee_leaves_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_leaves
+    ADD CONSTRAINT employee_leaves_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: employee_leaves employee_leaves_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.employee_leaves
+    ADD CONSTRAINT employee_leaves_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id);
 
 
 --
@@ -1827,6 +1996,22 @@ ALTER TABLE ONLY public.users
 
 
 --
+-- Name: lesson_executions lesson_executions_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_executions
+    ADD CONSTRAINT lesson_executions_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: lesson_executions lesson_executions_timetable_period_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lesson_executions
+    ADD CONSTRAINT lesson_executions_timetable_period_id_fkey FOREIGN KEY (timetable_period_id) REFERENCES public.timetable_periods(id);
+
+
+--
 -- Name: request_attachments request_attachments_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1942,5 +2127,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict mmmNd3ubL5C0ogRKZGpm0KNJAeObQne2aY9shxAgEWDIjs1gAl2fnaliYa2WJY6
+\unrestrict k5Vrz1RPCcuAaClphISoLbLuEHybvI2ul1QpsKUk3m8eFkqrBIdzssi8aMYDnXS
 
