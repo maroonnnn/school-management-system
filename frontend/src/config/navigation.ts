@@ -6,7 +6,19 @@ export interface NavItem {
   icon: string; // bootstrap-icons class
   description: string;
   roles: Role[] | "ALL";
+  group: NavGroup;
 }
+
+export type NavGroup = "general" | "data" | "schedule" | "followup" | "admin";
+
+/** Sidebar section titles, in display order. */
+export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
+  { id: "general", label: "" },
+  { id: "data", label: "البيانات المدرسية" },
+  { id: "schedule", label: "الدوام والنصاب" },
+  { id: "followup", label: "المتابعة والتقارير" },
+  { id: "admin", label: "الإدارة" },
+];
 
 /** Single source for sidebar links, home cards and route guards. Add new pages here. */
 export const NAV_ITEMS: NavItem[] = [
@@ -16,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-house-door",
     description: "",
     roles: "ALL",
+    group: "general",
   },
   {
     path: "/schools",
@@ -23,6 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-building",
     description: "إضافة المدارس وربطها بالمديرية وتعديل بياناتها.",
     roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN"],
+    group: "data",
   },
   {
     path: "/staff",
@@ -30,6 +44,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-people",
     description: "ملفات المعلمين والكادر الإداري: البيانات والتخصص والتكليف.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "data",
   },
   {
     path: "/students",
@@ -37,6 +52,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-mortarboard",
     description: "الصفوف والشعب وأسماء الطلاب في كل شعبة.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "data",
   },
   {
     path: "/timetable",
@@ -44,6 +60,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-calendar3-week",
     description: "إدخال جدول حصص كل شعبة: اليوم والوقت والمادة والمعلم.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "schedule",
   },
   {
     path: "/quota",
@@ -51,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-speedometer2",
     description: "النصاب المطلوب والمنفّذ والمتبقي لكل معلم، وسجل تنفيذ الحصص والإجازات.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "schedule",
   },
   {
     path: "/my-schedule",
@@ -58,6 +76,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-calendar-check",
     description: "جدول حصصك الأسبوعي والنصاب المطلوب والمنفّذ.",
     roles: ["TEACHER"],
+    group: "schedule",
   },
   {
     path: "/settings",
@@ -65,6 +84,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-sliders",
     description: "شرائح نصاب المثبّت، أجر حصة الوكيل، أوقات الحصص.",
     roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL"],
+    group: "admin",
   },
   {
     path: "/grades",
@@ -72,6 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-journal-check",
     description: "إدخال علامات الطلاب من الموجّه واعتمادها من مدير المدرسة.",
     roles: ["SUPERVISOR", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "DIRECTORATE_ADMIN"],
+    group: "followup",
   },
   {
     path: "/users",
@@ -79,6 +100,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-person-gear",
     description: "إنشاء حسابات المستخدمين وتعطيلها وتعيين الأدوار.",
     roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL"],
+    group: "admin",
   },
   {
     path: "/reports/monthly",
@@ -86,6 +108,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-bar-chart-line",
     description: "عرض ملخص الحضور والتفاصيل الشهرية للمعلم وطباعتها.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
+    group: "followup",
   },
   {
     path: "/requests/review",
@@ -93,6 +116,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-file-earmark-check",
     description: "مراجعة الطلبات المقدمة إلى مديريتك وتحديث حالتها.",
     roles: ["DIRECTORATE_ADMIN"],
+    group: "followup",
   },
 ];
 

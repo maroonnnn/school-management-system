@@ -1,0 +1,180 @@
+/*
+ * Syrian visual identity theme — loaded after Bootstrap (main.tsx) so it overrides Bootstrap's CSS variables.
+ * Colors taken from the official emblem (public/brand/emblem.webp): deep green + gold.
+ * Use the --brand-* tokens in components instead of hard-coded hex colors.
+ */
+:root {
+  --brand-green-950: #072a20;
+  --brand-green-900: #0b3b2e;
+  --brand-green-800: #0e4a39;
+  --brand-green-700: #115a45;
+  --brand-green-600: #166b52;
+  --brand-green-100: #dcebe4;
+  --brand-green-50: #eff6f2;
+  --brand-gold-700: #8a7442;
+  --brand-gold-600: #a08a56;
+  --brand-gold-500: #b9a26a;
+  --brand-gold-200: #e7dcc0;
+  --brand-gold-50: #faf6ec;
+  --brand-ink: #1d2a26;
+  --brand-muted: #5f6f69;
+  --brand-surface: #f5f6f2;
+  --brand-border: #e2e6e0;
+
+  /* Bootstrap overrides */
+  --bs-body-font-family: "Cairo", "Segoe UI", Tahoma, Arial, sans-serif;
+  --bs-body-color: var(--brand-ink);
+  --bs-body-bg: var(--brand-surface);
+  --bs-secondary-color: var(--brand-muted);
+  --bs-border-color: var(--brand-border);
+  --bs-primary: var(--brand-green-700);
+  --bs-primary-rgb: 17, 90, 69;
+  --bs-primary-text-emphasis: var(--brand-green-900);
+  --bs-primary-bg-subtle: var(--brand-green-100);
+  --bs-primary-border-subtle: #b5d3c5;
+  --bs-link-color: var(--brand-green-700);
+  --bs-link-color-rgb: 17, 90, 69;
+  --bs-link-hover-color: var(--brand-green-900);
+  --bs-link-hover-color-rgb: 11, 59, 46;
+  --bs-focus-ring-color: rgba(17, 90, 69, .25);
+  --bs-border-radius: .55rem;
+  --bs-border-radius-lg: .8rem;
+}
+
+body { font-family: var(--bs-body-font-family); background: var(--brand-surface); color: var(--brand-ink); }
+
+.btn-primary {
+  --bs-btn-bg: var(--brand-green-700);
+  --bs-btn-border-color: var(--brand-green-700);
+  --bs-btn-hover-bg: var(--brand-green-900);
+  --bs-btn-hover-border-color: var(--brand-green-900);
+  --bs-btn-active-bg: var(--brand-green-950);
+  --bs-btn-active-border-color: var(--brand-green-950);
+  --bs-btn-disabled-bg: var(--brand-green-600);
+  --bs-btn-disabled-border-color: var(--brand-green-600);
+  --bs-btn-focus-shadow-rgb: 17, 90, 69;
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--brand-green-700);
+  --bs-btn-border-color: var(--brand-green-700);
+  --bs-btn-hover-bg: var(--brand-green-700);
+  --bs-btn-hover-border-color: var(--brand-green-700);
+  --bs-btn-active-bg: var(--brand-green-900);
+  --bs-btn-active-border-color: var(--brand-green-900);
+  --bs-btn-disabled-color: var(--brand-green-600);
+  --bs-btn-disabled-border-color: var(--brand-green-600);
+  --bs-btn-focus-shadow-rgb: 17, 90, 69;
+}
+.btn-gold {
+  --bs-btn-color: var(--brand-green-950);
+  --bs-btn-bg: var(--brand-gold-500);
+  --bs-btn-border-color: var(--brand-gold-500);
+  --bs-btn-hover-color: var(--brand-green-950);
+  --bs-btn-hover-bg: var(--brand-gold-200);
+  --bs-btn-hover-border-color: var(--brand-gold-200);
+  --bs-btn-active-bg: var(--brand-gold-600);
+  font-weight: 700;
+}
+.form-control:focus, .form-select:focus, .form-check-input:focus {
+  border-color: var(--brand-green-600);
+  box-shadow: 0 0 0 .2rem rgba(17, 90, 69, .18);
+}
+.form-check-input:checked { background-color: var(--brand-green-700); border-color: var(--brand-green-700); }
+.list-group-item.active { background-color: var(--brand-green-700); border-color: var(--brand-green-700); }
+.table-primary { --bs-table-bg: var(--brand-green-100); --bs-table-border-color: #c7ddd3; }
+.table-light { --bs-table-bg: #f1f3ee; --bs-table-color: var(--brand-ink); }
+.table > thead th { font-weight: 700; color: var(--brand-green-900); white-space: nowrap; }
+.text-primary { color: var(--brand-green-700) !important; }
+.bg-primary-subtle { background-color: var(--brand-green-50) !important; }
+.card { --bs-card-border-color: var(--brand-border); }
+.shadow-sm { box-shadow: 0 1px 2px rgba(11, 59, 46, .06), 0 2px 8px rgba(11, 59, 46, .05) !important; }
+
+/* ---------- headings & accents ---------- */
+.brand-title { color: var(--brand-green-900); }
+.gold-rule { display: inline-block; width: 48px; height: 3px; background: var(--brand-gold-500); border-radius: 2px; }
+.page-title { color: var(--brand-green-900); font-weight: 800; }
+
+/* ---------- app shell ---------- */
+.app-shell { background: var(--brand-surface); }
+.app-topbar {
+  background: linear-gradient(90deg, var(--brand-green-950) 0%, var(--brand-green-800) 100%) !important;
+  border-bottom: 3px solid var(--brand-gold-500);
+  min-height: 60px;
+}
+.topbar-emblem { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(185, 162, 106, .6); }
+.topbar-title { color: #fff; font-weight: 800; line-height: 1.1; }
+.topbar-subtitle { color: var(--brand-gold-200); font-size: .75rem; }
+.topbar-user { color: #fff; }
+.topbar-user small { color: var(--brand-gold-200); }
+.app-sidebar { background: #fff; border-inline-start: 1px solid var(--brand-border) !important; }
+.app-sidebar-mobile { top: 63px !important; }
+.sidebar-backdrop { inset: 63px 0 0 0 !important; background: rgba(7, 42, 32, .4) !important; }
+.sidebar-section { font-size: .72rem; font-weight: 700; color: var(--brand-muted); padding: .75rem .85rem .25rem; letter-spacing: .02em; }
+.sidebar-link { color: #2e3f39 !important; border-inline-end: 3px solid transparent; }
+.sidebar-link:hover { background: var(--brand-green-50) !important; color: var(--brand-green-900) !important; }
+.sidebar-link.active {
+  background: var(--brand-green-700) !important; color: #fff !important;
+  border-inline-end-color: var(--brand-gold-500);
+}
+.sidebar-link i { font-size: 1.05rem; width: 1.2rem; text-align: center; }
+.sidebar-footer { font-size: .72rem; color: var(--brand-muted); padding: 1rem .85rem; border-top: 1px solid var(--brand-border); }
+
+/* ---------- home / dashboard ---------- */
+.hero {
+  position: relative; overflow: hidden; border-radius: 1rem; color: #fff;
+  background: radial-gradient(120% 140% at 0% 0%, var(--brand-green-700) 0%, var(--brand-green-900) 55%, var(--brand-green-950) 100%);
+  border: 1px solid rgba(185, 162, 106, .35);
+}
+.hero::after {
+  content: ""; position: absolute; inset: auto -40px -60px auto; width: 260px; height: 260px;
+  background: url("/brand/emblem.webp") center / cover no-repeat; opacity: .12; border-radius: 50%;
+}
+.hero-kicker { color: var(--brand-gold-200); font-size: .85rem; }
+.hero h1 { font-weight: 800; }
+.kpi-card { border: 1px solid var(--brand-border); border-radius: .9rem; background: #fff; height: 100%; }
+.kpi-icon {
+  width: 44px; height: 44px; border-radius: .75rem; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--brand-green-50); color: var(--brand-green-700); font-size: 1.25rem;
+}
+.kpi-icon.gold { background: var(--brand-gold-50); color: var(--brand-gold-700); }
+.kpi-value { font-size: 1.7rem; font-weight: 800; color: var(--brand-green-900); line-height: 1.1; }
+.kpi-label { color: var(--brand-muted); font-size: .85rem; }
+.progress-brand { height: 6px; background: var(--brand-green-50); border-radius: 3px; overflow: hidden; }
+.progress-brand > span { display: block; height: 100%; background: var(--brand-green-600); border-radius: 3px; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+.bars .bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.bars .bar span.fill { width: 100%; max-width: 34px; border-radius: 6px 6px 2px 2px; background: var(--brand-green-600); }
+.bars .bar span.fill.low { background: var(--brand-gold-500); }
+.bars .bar small { font-size: .68rem; color: var(--brand-muted); white-space: nowrap; }
+.attention-item { display: flex; align-items: center; gap: .75rem; padding: .7rem .2rem; border-bottom: 1px solid var(--brand-border); text-decoration: none; color: inherit; }
+.attention-item:last-child { border-bottom: 0; }
+.attention-item:hover { background: var(--brand-green-50); }
+.attention-count { min-width: 2.2rem; text-align: center; font-weight: 800; border-radius: .5rem; padding: .15rem .45rem; background: var(--brand-gold-50); color: var(--brand-gold-700); }
+.service-card { border: 1px solid var(--brand-border) !important; }
+.service-card:hover { border-color: var(--brand-gold-500) !important; box-shadow: 0 .5rem 1rem rgba(11, 59, 46, .1) !important; }
+.service-icon { width: 42px; height: 42px; border-radius: .7rem; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-green-50); color: var(--brand-green-700); font-size: 1.2rem; }
+
+/* ---------- login ---------- */
+.login-split { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; }
+.login-brand {
+  position: relative; overflow: hidden; color: #fff; padding: 3rem;
+  display: flex; flex-direction: column; justify-content: space-between;
+  background: radial-gradient(120% 120% at 100% 0%, var(--brand-green-700) 0%, var(--brand-green-900) 50%, var(--brand-green-950) 100%);
+  border-inline-start: 4px solid var(--brand-gold-500);
+}
+.login-brand .emblem { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 6px rgba(185, 162, 106, .25); }
+.login-brand h1 { font-weight: 800; }
+.login-brand .feature { display: flex; gap: .6rem; align-items: center; color: rgba(255, 255, 255, .88); }
+.login-brand .feature i { color: var(--brand-gold-500); }
+.login-form-side { display: flex; align-items: center; justify-content: center; padding: 2rem 1rem; background: var(--brand-surface); }
+.login-card-new { width: 100%; max-width: 420px; }
+@media (max-width: 900px) {
+  .login-split { grid-template-columns: 1fr; }
+  .login-brand { padding: 2rem 1.25rem; border-inline-start: 0; border-bottom: 4px solid var(--brand-gold-500); }
+  .login-brand .emblem { width: 96px; height: 96px; }
+  .login-brand .features { display: none; }
+}
+
+/* ---------- misc ---------- */
+.timetable-cell.editable:hover { outline-color: var(--brand-green-600) !important; }
+.badge.text-bg-primary { background-color: var(--brand-green-700) !important; }

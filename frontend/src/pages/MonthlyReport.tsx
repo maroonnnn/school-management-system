@@ -89,7 +89,7 @@ function MonthlyReport() {
   return (
     <div className="min-vh-100 bg-light" dir="rtl">
       {/* الشريط العلوي - يظهر على الشاشة فقط */}
-      <nav className="navbar navbar-dark shadow-sm no-print" style={{ backgroundColor: "#102a43" }}>
+      <nav className="navbar navbar-dark shadow-sm no-print" style={{ backgroundColor: "var(--brand-green-900)" }}>
         <div className="container-fluid px-4">
           <div className="d-flex align-items-center gap-3 py-2">
             <div
@@ -116,7 +116,7 @@ function MonthlyReport() {
             <i className="bi bi-house-door ms-1"></i>
             لوحة التحكم / التقارير
           </div>
-          <h2 className="fw-bold mb-2" style={{ color: "#102a43" }}>
+          <h2 className="fw-bold mb-2" style={{ color: "var(--brand-green-900)" }}>
             التقرير الشهري للحضور
           </h2>
           <p className="text-secondary mb-0">

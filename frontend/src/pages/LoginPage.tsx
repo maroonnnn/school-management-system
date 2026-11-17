@@ -29,100 +29,69 @@ function LoginPage() {
   }
 
   return (
-    <main
-      className="min-vh-100 d-flex align-items-center bg-light py-5"
-      dir="rtl"
-    >
-      <div className="container">
-        <div className="row justify-content-center">
-          <div className="col-12 col-md-8 col-lg-5">
-            <div className="text-center mb-4">
-              <div
-                className="bg-primary text-white rounded-4 d-inline-flex align-items-center justify-content-center mb-3 shadow-sm"
-                style={{ width: 72, height: 72 }}
-                aria-hidden="true"
-              >
-                <i className="bi bi-mortarboard-fill fs-2"></i>
-              </div>
-              <h1 className="h3 fw-bold mb-2" style={{ color: "#102a43" }}>
-                نظام إدارة ومتابعة المدارس
-              </h1>
-              <p className="text-secondary mb-0">وزارة التربية والتعليم</p>
-            </div>
-
-            <section className="card border-0 shadow-sm rounded-4">
-              <div className="card-body p-4 p-md-5">
-                <h2 className="h5 fw-bold mb-1">تسجيل الدخول</h2>
-                <p className="text-secondary mb-4">
-                  أدخل بيانات حسابك للمتابعة إلى الصفحة الرئيسية.
-                </p>
-
-                {logoutReason && !error && (
-                  <div className="alert alert-warning" role="status">
-                    <i className="bi bi-clock-history ms-2"></i>
-                    {logoutReason}
-                  </div>
-                )}
-
-                {error && (
-                  <div className="alert alert-danger" role="alert">
-                    <i className="bi bi-exclamation-circle ms-2"></i>
-                    {error}
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit}>
-                  <div className="mb-3">
-                    <label htmlFor="username" className="form-label fw-semibold">
-                      اسم المستخدم
-                    </label>
-                    <input
-                      id="username"
-                      name="username"
-                      type="text"
-                      className="form-control form-control-lg"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
-                      autoComplete="username"
-                      required
-                      autoFocus
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="password" className="form-label fw-semibold">
-                      كلمة المرور
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      className="form-control form-control-lg"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="btn btn-primary btn-lg w-100"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm ms-2"></span>
-                        جارٍ تسجيل الدخول...
-                      </>
-                    ) : (
-                      "دخول"
-                    )}
-                  </button>
-                </form>
-              </div>
-            </section>
-          </div>
+    <main className="login-split" dir="rtl">
+      <section className="login-brand">
+        <div>
+          <img src="/brand/emblem.webp" alt="شعار الجمهورية العربية السورية" className="emblem mb-4" />
+          <div className="hero-kicker mb-1">الجمهورية العربية السورية · وزارة التربية والتعليم</div>
+          <h1 className="h2 mb-3">نظام إدارة ومتابعة المدارس</h1>
+          <p className="opacity-75 mb-0" style={{ maxWidth: 460 }}>
+            منصة مركزية تربط الوزارة والمديريات والمدارس: الحضور، النصاب، الطلبات، والتقارير في مكان واحد.
+          </p>
         </div>
-      </div>
+        <div className="features d-flex flex-column gap-2 mt-4">
+          <div className="feature"><i className="bi bi-person-check"></i>متابعة حضور الكادر والنصاب التدريسي</div>
+          <div className="feature"><i className="bi bi-inbox"></i>طلبات المدارس ومتابعتها مع المديرية</div>
+          <div className="feature"><i className="bi bi-bar-chart-line"></i>تقارير ومؤشرات تدعم اتخاذ القرار</div>
+        </div>
+      </section>
+
+      <section className="login-form-side">
+        <div className="login-card-new">
+          <h2 className="h4 fw-bold brand-title mb-1">تسجيل الدخول</h2>
+          <span className="gold-rule mb-3"></span>
+          <p className="text-secondary mb-4">أدخل بيانات حسابك للمتابعة.</p>
+
+          {logoutReason && !error && (
+            <div className="alert alert-warning" role="status">
+              <i className="bi bi-clock-history ms-2"></i>
+              {logoutReason}
+            </div>
+          )}
+          {error && (
+            <div className="alert alert-danger" role="alert">
+              <i className="bi bi-exclamation-circle ms-2"></i>
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="card border-0 shadow-sm rounded-4 p-4">
+            <div className="mb-3">
+              <label htmlFor="username" className="form-label fw-semibold">اسم المستخدم</label>
+              <div className="input-group">
+                <span className="input-group-text bg-white"><i className="bi bi-person"></i></span>
+                <input id="username" name="username" type="text" dir="ltr" className="form-control form-control-lg"
+                  value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" required autoFocus />
+              </div>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="password" className="form-label fw-semibold">كلمة المرور</label>
+              <div className="input-group">
+                <span className="input-group-text bg-white"><i className="bi bi-lock"></i></span>
+                <input id="password" name="password" type="password" dir="ltr" className="form-control form-control-lg"
+                  value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required />
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary btn-lg w-100" disabled={loading}>
+              {loading ? (<><span className="spinner-border spinner-border-sm ms-2"></span>جارٍ تسجيل الدخول...</>) : "دخول"}
+            </button>
+          </form>
+          <p className="small text-secondary text-center mt-4 mb-0">
+            <i className="bi bi-shield-lock ms-1"></i>
+            الاستخدام مخصّص للموظفين المخوّلين، وكل العمليات مسجّلة.
+          </p>
+        </div>
+      </section>
     </main>
   );
 }

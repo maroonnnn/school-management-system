@@ -6,7 +6,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-4">
       <div>
-        <h1 className="h4 fw-bold mb-1" style={{ color: "#102a43" }}>{title}</h1>
+        <h1 className="h4 page-title mb-1">{title}</h1>
+        <span className="gold-rule mb-2"></span>
         {subtitle && <p className="text-secondary mb-0">{subtitle}</p>}
       </div>
       {actions && <div className="d-flex gap-2">{actions}</div>}

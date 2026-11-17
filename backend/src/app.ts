@@ -12,6 +12,7 @@ import academicsRoutes from "./routes/academics.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import gradesRoutes from "./routes/grades.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/academics", academicsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/grades", gradesRoutes);
 app.use("/api/schedule", scheduleRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Test route
 app.get("/api/health", (req, res) => {

@@ -113,7 +113,7 @@ function DirectorateRequests() {
           <i className="bi bi-house-door ms-1"></i>
           لوحة التحكم / طلبات المدارس
         </div>
-        <h2 className="fw-bold mb-2" style={{ color: "#102a43" }}>
+        <h2 className="fw-bold mb-2" style={{ color: "var(--brand-green-900)" }}>
           مراجعة طلبات المدارس
         </h2>
         <p className="text-secondary mb-0">

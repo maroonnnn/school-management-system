@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { NAV_ITEMS, canAccess } from "../config/navigation";
+import { NAV_GROUPS, NAV_ITEMS, canAccess } from "../config/navigation";
 import { roleLabels } from "../types/auth";
 
 function MainLayout() {
@@ -10,19 +10,28 @@ function MainLayout() {
   const items = NAV_ITEMS.filter((item) => canAccess(item, user?.role));
 
   const links = (
-    <nav className="nav flex-column gap-1 p-3">
-      {items.map((item) => (
-        <NavLink
-          key={item.path}
-          to={item.path}
-          end={item.path === "/"}
-          onClick={() => setMenuOpen(false)}
-          className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
-        >
-          <i className={`bi ${item.icon}`}></i>
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
+    <nav className="nav flex-column p-2" aria-label="القائمة الرئيسية">
+      {NAV_GROUPS.map((g) => {
+        const groupItems = items.filter((i) => i.group === g.id);
+        if (groupItems.length === 0) return null;
+        return (
+          <div key={g.id} className="mb-1">
+            {g.label && <div className="sidebar-section">{g.label}</div>}
+            {groupItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.path === "/"}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) => `sidebar-link mb-1 ${isActive ? "active" : ""}`}
+              >
+                <i className={`bi ${item.icon}`}></i>
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
     </nav>
   );
 
@@ -39,13 +48,16 @@ function MainLayout() {
             >
               <i className="bi bi-list fs-3"></i>
             </button>
-            <i className="bi bi-mortarboard-fill fs-4 text-white"></i>
-            <span className="navbar-brand fw-bold m-0">نظام إدارة ومتابعة المدارس</span>
+            <img src="/brand/emblem.webp" alt="" className="topbar-emblem" />
+            <div>
+              <div className="topbar-title">نظام إدارة ومتابعة المدارس</div>
+              <div className="topbar-subtitle d-none d-sm-block">الجمهورية العربية السورية — وزارة التربية والتعليم</div>
+            </div>
           </div>
           <div className="d-flex align-items-center gap-3">
-            <div className="text-end d-none d-sm-block">
-              <div className="text-white fw-semibold">{user?.fullName}</div>
-              <small className="text-white-50">{user && roleLabels[user.role]}</small>
+            <div className="text-end d-none d-sm-block topbar-user">
+              <div className="fw-semibold">{user?.fullName}</div>
+              <small>{user && roleLabels[user.role]}</small>
             </div>
             <button type="button" className="btn btn-sm btn-outline-light" onClick={() => logout()}>
               <i className="bi bi-box-arrow-left ms-1"></i>
@@ -56,7 +68,10 @@ function MainLayout() {
       </header>
 
       <div className="app-body">
-        <aside className="app-sidebar d-none d-lg-block no-print">{links}</aside>
+        <aside className="app-sidebar d-none d-lg-flex flex-column no-print">
+          <div className="flex-grow-1">{links}</div>
+          <div className="sidebar-footer">مديرية تربية دمشق · النسخة التجريبية {new Date().getFullYear()}</div>
+        </aside>
 
         {menuOpen && (
           <>

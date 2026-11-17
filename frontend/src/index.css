@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+/* Cairo font is bundled via @fontsource/cairo (main.tsx) — works offline */
 :root {
     font-family: 'Cairo', Arial, sans-serif;
     color: #203047;
