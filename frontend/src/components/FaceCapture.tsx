@@ -34,7 +34,16 @@ export default function FaceCapture({ onCapture, busy, actionLabel }: { onCaptur
         }
         setReady(true);
       })
-      .catch(() => setError("تعذّر تشغيل الكاميرا — تأكد من السماح للمتصفح باستخدامها"));
+      .catch((e: DOMException) => {
+        const byName: Record<string, string> = {
+          NotAllowedError: "تم رفض إذن الكاميرا — اسمح بها من رمز القفل/الكاميرا بجانب عنوان الصفحة، أو من إعدادات خصوصية Windows",
+          NotFoundError: "لا توجد كاميرا متصلة بالجهاز",
+          NotReadableError: "الكاميرا مستخدمة من برنامج آخر (Zoom، Teams، تطبيق الكاميرا...) — أغلقه وأعد المحاولة",
+          OverconstrainedError: "الكاميرا لا تدعم الدقة المطلوبة",
+          SecurityError: "المتصفح يمنع الكاميرا لهذه الصفحة — افتح النظام عبر http://localhost:5173",
+        };
+        setError(`تعذّر تشغيل الكاميرا: ${byName[e?.name] ?? e?.message ?? "خطأ غير معروف"} (${e?.name ?? "?"})`);
+      });
     return () => {
       cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
