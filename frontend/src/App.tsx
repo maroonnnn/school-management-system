@@ -16,6 +16,8 @@ import TimetablePage from "./pages/TimetablePage";
 import QuotaPage from "./pages/QuotaPage";
 import MySchedulePage from "./pages/MySchedulePage";
 import SettingsPage from "./pages/SettingsPage";
+import AttendancePage from "./pages/AttendancePage";
+import MyAttendancePage from "./pages/MyAttendancePage";
 
 const roles = (path: string) => NAV_ITEMS.find((i) => i.path === path)?.roles ?? "ALL";
 
@@ -36,6 +38,8 @@ function App() {
             <Route path="schools" element={<RequireAuth roles={roles("/schools")}><SchoolsPage /></RequireAuth>} />
             <Route path="staff" element={<RequireAuth roles={roles("/staff")}><StaffPage /></RequireAuth>} />
             <Route path="students" element={<RequireAuth roles={roles("/students")}><StudentsPage /></RequireAuth>} />
+            <Route path="attendance" element={<RequireAuth roles={roles("/attendance")}><AttendancePage /></RequireAuth>} />
+            <Route path="my-attendance" element={<RequireAuth roles={roles("/my-attendance")}><MyAttendancePage /></RequireAuth>} />
             <Route path="timetable" element={<RequireAuth roles={roles("/timetable")}><TimetablePage /></RequireAuth>} />
             <Route path="quota" element={<RequireAuth roles={roles("/quota")}><QuotaPage /></RequireAuth>} />
             <Route path="my-schedule" element={<RequireAuth roles={roles("/my-schedule")}><MySchedulePage /></RequireAuth>} />

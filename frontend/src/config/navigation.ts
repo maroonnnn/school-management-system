@@ -55,6 +55,22 @@ export const NAV_ITEMS: NavItem[] = [
     group: "data",
   },
   {
+    path: "/attendance",
+    label: "الحضور والدوام",
+    icon: "bi-person-check",
+    description: "تصنيف حضور الكادر اليومي، التصحيحات، الانقطاعات، وملف Excel الشهري.",
+    roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "schedule",
+  },
+  {
+    path: "/my-attendance",
+    label: "حضوري",
+    icon: "bi-person-check",
+    description: "سجل حضورك اليومي وحالته.",
+    roles: ["TEACHER", "SUPERVISOR", "SCHOOL_STAFF"],
+    group: "schedule",
+  },
+  {
     path: "/timetable",
     label: "جدول الحصص",
     icon: "bi-calendar3-week",

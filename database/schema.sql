@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict k5Vrz1RPCcuAaClphISoLbLuEHybvI2ul1QpsKUk3m8eFkqrBIdzssi8aMYDnXS
+\restrict rG4d9j0tqmCt8et9lDMPEDSTOja5WNkvMg4BZfIYOjqx5Tv8WhMeasYqohVhrlk
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -25,12 +25,12 @@ SET row_security = off;
 
 CREATE FUNCTION public.permanent_quota(p_years integer) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT (r->>'quota')::int
-      FROM settings, jsonb_array_elements(value) r
-     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
-     ORDER BY (r->>'minYears')::int DESC
-     LIMIT 1
+    AS $$
+    SELECT (r->>'quota')::int
+      FROM settings, jsonb_array_elements(value) r
+     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
+     ORDER BY (r->>'minYears')::int DESC
+     LIMIT 1
 $$;
 
 
@@ -40,16 +40,29 @@ $$;
 
 CREATE FUNCTION public.prevent_approved_grade_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_status varchar(20);
-BEGIN
-    SELECT status INTO v_status FROM assessments
-     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
-    IF v_status = 'APPROVED' THEN
-        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
+    AS $$
+DECLARE v_status varchar(20);
+BEGIN
+    SELECT status INTO v_status FROM assessments
+     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
+    IF v_status = 'APPROVED' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+--
+-- Name: prevent_attendance_event_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_attendance_event_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'أحداث الحضور الخام لا تقبل التعديل أو الحذف — استخدم التصحيحات';
+END;
 $$;
 
 
@@ -59,10 +72,10 @@ $$;
 
 CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
 $$;
 
 
@@ -72,10 +85,10 @@ $$;
 
 CREATE FUNCTION public.stage_allows_grade(p_stage smallint, p_grade integer) RETURNS boolean
     LANGUAGE sql IMMUTABLE
-    AS $$
-    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
-                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
-                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
+    AS $$
+    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
+                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
+                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
 $$;
 
 
@@ -85,45 +98,19 @@ $$;
 
 CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE
-    v_last_event_type VARCHAR(10);
-    v_last_event_time TIMESTAMPTZ;
-BEGIN
-    -- منع إدخال حركتين متزامنتين لنفس الموظف
-    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
-
-    -- جلب آخر حركة مسجلة للموظف
-    SELECT event_type, event_time
-    INTO v_last_event_type, v_last_event_time
-    FROM attendance_events
-    WHERE employee_assignment_id = NEW.employee_assignment_id
-    ORDER BY event_time DESC, id DESC
-    LIMIT 1;
-
-    -- إذا لم توجد حركات سابقة، يجب أن تكون الحركة دخولاً
-    IF NOT FOUND THEN
-        IF NEW.event_type <> 'IN' THEN
-            RAISE EXCEPTION
-                'لا يمكن تسجيل خروج قبل تسجيل الدخول';
-        END IF;
-
-    ELSE
-        -- التأكد من أن وقت الحركة الجديدة أحدث من السابقة
-        IF NEW.event_time <= v_last_event_time THEN
-            RAISE EXCEPTION
-                'وقت الحركة الجديدة يجب أن يكون أحدث من آخر حركة مسجلة';
-        END IF;
-
-        -- منع تكرار نوع الحركة
-        IF NEW.event_type = v_last_event_type THEN
-            RAISE EXCEPTION
-                'تسلسل الحركات غير صحيح: لا يمكن تسجيل نفس نوع الحركة مرتين متتاليتين';
-        END IF;
-    END IF;
-
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_window int;
+BEGIN
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+    SELECT (value #>> '{}')::int INTO v_window FROM settings WHERE key = 'duplicate_event_window_minutes';
+    IF EXISTS (SELECT 1 FROM attendance_events
+                WHERE employee_assignment_id = NEW.employee_assignment_id
+                  AND event_type = NEW.event_type
+                  AND abs(extract(epoch FROM event_time - NEW.event_time)) < COALESCE(v_window, 2) * 60) THEN
+        RETURN NULL; -- duplicate: ignore
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -133,15 +120,15 @@ $$;
 
 CREATE FUNCTION public.validate_class_grade_stage() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
-    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
-        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
+    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
+        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -151,23 +138,23 @@ $$;
 
 CREATE FUNCTION public.validate_contract_hours() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
-BEGIN
-    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
-    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
-      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
-    IF v_type = 'CONTRACT' THEN
-        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
-          FROM employee_assignments
-         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
-        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
-            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
-                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
-        END IF;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
+BEGIN
+    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
+    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
+      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
+    IF v_type = 'CONTRACT' THEN
+        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
+          FROM employee_assignments
+         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
+        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
+            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
+                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -177,15 +164,15 @@ $$;
 
 CREATE FUNCTION public.validate_period_duration() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_minutes int;
-BEGIN
-    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
-    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
-        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_minutes int;
+BEGIN
+    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
+    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
+        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -195,14 +182,14 @@ $$;
 
 CREATE FUNCTION public.validate_school_stage_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
-                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
-        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
+                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
+        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -212,17 +199,17 @@ $$;
 
 CREATE FUNCTION public.validate_section_track() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
-    IF v_stage = 3 AND NEW.track IS NULL THEN
-        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
-    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
-        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
+    IF v_stage = 3 AND NEW.track IS NULL THEN
+        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
+    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
+        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -232,26 +219,26 @@ $$;
 
 CREATE FUNCTION public.validate_teacher_slot() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_emp bigint; v_clash text;
-BEGIN
-    SELECT ea.employee_id INTO v_emp
-      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-     WHERE ta.id = NEW.teaching_assignment_id;
-    SELECT c.name || ' / ' || sc.name INTO v_clash
-      FROM timetable_periods tp
-      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
-      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
-      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
-     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
-       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
-     LIMIT 1;
-    IF v_clash IS NOT NULL THEN
-        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_emp bigint; v_clash text;
+BEGIN
+    SELECT ea.employee_id INTO v_emp
+      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+     WHERE ta.id = NEW.teaching_assignment_id;
+    SELECT c.name || ' / ' || sc.name INTO v_clash
+      FROM timetable_periods tp
+      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
+      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
+      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
+     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
+       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
+     LIMIT 1;
+    IF v_clash IS NOT NULL THEN
+        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -261,10 +248,10 @@ $$;
 
 CREATE FUNCTION public.years_of_service(p_employee_id bigint, p_on date DEFAULT CURRENT_DATE) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
-      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
-     WHERE e.id = p_employee_id
+    AS $$
+    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
+      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
+     WHERE e.id = p_employee_id
 $$;
 
 
@@ -340,6 +327,46 @@ ALTER TABLE public.assessments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY 
 
 
 --
+-- Name: attendance_corrections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.attendance_corrections (
+    id bigint NOT NULL,
+    employee_assignment_id bigint NOT NULL,
+    work_date date NOT NULL,
+    corrected_status character varying(20) NOT NULL,
+    corrected_in time without time zone,
+    corrected_out time without time zone,
+    reason text NOT NULL,
+    proposed_by bigint NOT NULL,
+    proposed_at timestamp with time zone DEFAULT now() NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    decided_by bigint,
+    decided_at timestamp with time zone,
+    decision_note text,
+    CONSTRAINT chk_corrected_status CHECK (((corrected_status)::text = ANY ((ARRAY['PRESENT'::character varying, 'LATE'::character varying, 'EARLY_LEAVE'::character varying, 'ABSENT'::character varying, 'EXCUSED'::character varying])::text[]))),
+    CONSTRAINT chk_correction_decision CHECK ((((status)::text = 'PENDING'::text) = (decided_by IS NULL))),
+    CONSTRAINT chk_correction_no_self_approval CHECK (((decided_by IS NULL) OR (decided_by <> proposed_by))),
+    CONSTRAINT chk_correction_reason CHECK ((length(TRIM(BOTH FROM reason)) > 0)),
+    CONSTRAINT chk_correction_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[])))
+);
+
+
+--
+-- Name: attendance_corrections_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.attendance_corrections ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.attendance_corrections_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: attendance_events; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -354,8 +381,14 @@ CREATE TABLE public.attendance_events (
     manual_reason text,
     notes text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    match_score numeric(5,4),
+    verification_status character varying(20) DEFAULT 'ACCEPTED'::character varying NOT NULL,
+    client_event_id uuid,
+    device_label character varying(100),
     CONSTRAINT attendance_events_event_type_check CHECK (((event_type)::text = ANY (ARRAY[('IN'::character varying)::text, ('OUT'::character varying)::text]))),
     CONSTRAINT attendance_events_verification_method_check CHECK (((verification_method)::text = ANY (ARRAY[('FACE'::character varying)::text, ('MANUAL'::character varying)::text, ('FINGERPRINT'::character varying)::text]))),
+    CONSTRAINT chk_match_score CHECK (((match_score IS NULL) OR ((match_score >= (0)::numeric) AND (match_score <= (1)::numeric)))),
+    CONSTRAINT chk_verification_status CHECK (((verification_status)::text = ANY ((ARRAY['ACCEPTED'::character varying, 'REJECTED'::character varying])::text[]))),
     CONSTRAINT manual_event_reason_check CHECK ((((verification_method)::text <> 'MANUAL'::text) OR ((recorded_by IS NOT NULL) AND (manual_reason IS NOT NULL) AND (length(TRIM(BOTH FROM manual_reason)) > 0))))
 );
 
@@ -513,7 +546,7 @@ CREATE TABLE public.employee_leaves (
     created_by bigint NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT chk_leave_dates CHECK ((end_date >= start_date)),
-    CONSTRAINT chk_leave_type CHECK (((leave_type)::text = ANY ((ARRAY['ANNUAL'::character varying, 'SICK'::character varying, 'OFFICIAL_ASSIGNMENT'::character varying, 'TRAINING'::character varying, 'OTHER'::character varying])::text[])))
+    CONSTRAINT chk_leave_type CHECK (((leave_type)::text = ANY (ARRAY[('ANNUAL'::character varying)::text, ('SICK'::character varying)::text, ('OFFICIAL_ASSIGNMENT'::character varying)::text, ('TRAINING'::character varying)::text, ('OTHER'::character varying)::text])))
 );
 
 
@@ -604,7 +637,7 @@ CREATE TABLE public.lesson_executions (
     notes text,
     recorded_by bigint NOT NULL,
     recorded_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT chk_lesson_status CHECK (((status)::text = ANY ((ARRAY['EXECUTED'::character varying, 'NOT_EXECUTED'::character varying, 'COMPENSATED'::character varying])::text[])))
+    CONSTRAINT chk_lesson_status CHECK (((status)::text = ANY (ARRAY[('EXECUTED'::character varying)::text, ('NOT_EXECUTED'::character varying)::text, ('COMPENSATED'::character varying)::text])))
 );
 
 
@@ -640,6 +673,38 @@ CREATE TABLE public.ministries (
 
 ALTER TABLE public.ministries ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.ministries_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: power_outages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.power_outages (
+    id bigint NOT NULL,
+    school_id bigint NOT NULL,
+    starts_at timestamp with time zone NOT NULL,
+    ends_at timestamp with time zone NOT NULL,
+    outage_type character varying(20) DEFAULT 'POWER'::character varying NOT NULL,
+    notes text,
+    recorded_by bigint NOT NULL,
+    recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_outage_period CHECK (((ends_at > starts_at) AND ((ends_at - starts_at) <= '24:00:00'::interval))),
+    CONSTRAINT chk_outage_type CHECK (((outage_type)::text = ANY ((ARRAY['POWER'::character varying, 'INTERNET'::character varying])::text[])))
+);
+
+
+--
+-- Name: power_outages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.power_outages ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.power_outages_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -849,7 +914,7 @@ CREATE TABLE public.sections (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     track character varying(30),
     CONSTRAINT chk_section_capacity CHECK (((capacity IS NULL) OR (capacity > 0))),
-    CONSTRAINT chk_section_track CHECK (((track IS NULL) OR ((track)::text = ANY ((ARRAY['GENERAL_SCIENTIFIC'::character varying, 'GENERAL_LITERARY'::character varying, 'COMMERCIAL'::character varying, 'INDUSTRIAL'::character varying])::text[]))))
+    CONSTRAINT chk_section_track CHECK (((track IS NULL) OR ((track)::text = ANY (ARRAY[('GENERAL_SCIENTIFIC'::character varying)::text, ('GENERAL_LITERARY'::character varying)::text, ('COMMERCIAL'::character varying)::text, ('INDUSTRIAL'::character varying)::text]))))
 );
 
 
@@ -982,7 +1047,7 @@ CREATE TABLE public.teacher_profiles (
     employment_type character varying(20) DEFAULT 'PERMANENT'::character varying NOT NULL,
     contract_weekly_hours numeric(6,2),
     CONSTRAINT chk_contract_hours CHECK (((((employment_type)::text = 'CONTRACT'::text) AND (contract_weekly_hours > (0)::numeric)) OR (((employment_type)::text = 'PERMANENT'::text) AND (contract_weekly_hours IS NULL)))),
-    CONSTRAINT chk_employment_type CHECK (((employment_type)::text = ANY ((ARRAY['PERMANENT'::character varying, 'CONTRACT'::character varying])::text[]))),
+    CONSTRAINT chk_employment_type CHECK (((employment_type)::text = ANY (ARRAY[('PERMANENT'::character varying)::text, ('CONTRACT'::character varying)::text]))),
     CONSTRAINT chk_teacher_experience CHECK ((years_of_experience >= 0))
 );
 
@@ -1166,6 +1231,14 @@ ALTER TABLE ONLY public.assessments
 
 
 --
+-- Name: attendance_corrections attendance_corrections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_corrections
+    ADD CONSTRAINT attendance_corrections_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: attendance_events attendance_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1251,6 +1324,14 @@ ALTER TABLE ONLY public.lesson_executions
 
 ALTER TABLE ONLY public.ministries
     ADD CONSTRAINT ministries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: power_outages power_outages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.power_outages
+    ADD CONSTRAINT power_outages_pkey PRIMARY KEY (id);
 
 
 --
@@ -1553,6 +1634,13 @@ CREATE INDEX idx_assignments_school ON public.employee_assignments USING btree (
 
 
 --
+-- Name: idx_attendance_ea_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_attendance_ea_time ON public.attendance_events USING btree (employee_assignment_id, event_time);
+
+
+--
 -- Name: idx_attendance_events_employee; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1637,6 +1725,13 @@ CREATE INDEX idx_leaves_employee_dates ON public.employee_leaves USING btree (em
 
 
 --
+-- Name: idx_outages_school_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_outages_school_time ON public.power_outages USING btree (school_id, starts_at);
+
+
+--
 -- Name: idx_period_timetable; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1690,6 +1785,27 @@ CREATE UNIQUE INDEX uq_active_assignment_per_school ON public.employee_assignmen
 --
 
 CREATE UNIQUE INDEX uq_active_school_deputy ON public.school_deputy_authorizations USING btree (school_id, deputy_user_id) WHERE (is_active = true);
+
+
+--
+-- Name: uq_attendance_client_event; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_attendance_client_event ON public.attendance_events USING btree (client_event_id) WHERE (client_event_id IS NOT NULL);
+
+
+--
+-- Name: uq_correction_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_correction_pending ON public.attendance_corrections USING btree (employee_assignment_id, work_date) WHERE ((status)::text = 'PENDING'::text);
+
+
+--
+-- Name: attendance_events trg_attendance_events_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_attendance_events_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.attendance_events FOR EACH STATEMENT EXECUTE FUNCTION public.prevent_attendance_event_change();
 
 
 --
@@ -1769,6 +1885,30 @@ ALTER TABLE ONLY public.assessments
 
 ALTER TABLE ONLY public.assessments
     ADD CONSTRAINT assessments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+
+
+--
+-- Name: attendance_corrections attendance_corrections_decided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_corrections
+    ADD CONSTRAINT attendance_corrections_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.users(id);
+
+
+--
+-- Name: attendance_corrections attendance_corrections_employee_assignment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_corrections
+    ADD CONSTRAINT attendance_corrections_employee_assignment_id_fkey FOREIGN KEY (employee_assignment_id) REFERENCES public.employee_assignments(id);
+
+
+--
+-- Name: attendance_corrections attendance_corrections_proposed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.attendance_corrections
+    ADD CONSTRAINT attendance_corrections_proposed_by_fkey FOREIGN KEY (proposed_by) REFERENCES public.users(id);
 
 
 --
@@ -2012,6 +2152,22 @@ ALTER TABLE ONLY public.lesson_executions
 
 
 --
+-- Name: power_outages power_outages_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.power_outages
+    ADD CONSTRAINT power_outages_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: power_outages power_outages_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.power_outages
+    ADD CONSTRAINT power_outages_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id);
+
+
+--
 -- Name: request_attachments request_attachments_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2127,5 +2283,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict k5Vrz1RPCcuAaClphISoLbLuEHybvI2ul1QpsKUk3m8eFkqrBIdzssi8aMYDnXS
+\unrestrict rG4d9j0tqmCt8et9lDMPEDSTOja5WNkvMg4BZfIYOjqx5Tv8WhMeasYqohVhrlk
 

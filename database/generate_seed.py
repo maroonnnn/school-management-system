@@ -311,13 +311,15 @@ while day <= TODAY:
             t_in = datetime.combine(day, datetime.min.time()) + timedelta(
                 hours=7, minutes=random.randint(35, 58) + (random.randint(20, 60) if late else 0))
             leave_early = random.random() < 0.05
-            t_out = datetime.combine(day, datetime.min.time()) + timedelta(
-                hours=13 if not leave_early else 11, minutes=random.randint(0, 40))
+            # teachers leave after their last lesson (~12:45); admin staff after official hours (13:30)
+            out_start = (13 * 60 if pos == "TEACHER" else 13 * 60 + 25) if not leave_early else 11 * 60
+            t_out = datetime.combine(day, datetime.min.time()) + timedelta(minutes=out_start + random.randint(0, 35))
             method = "FACE" if random.random() > 0.05 else "MANUAL"
             events.append((ea, "IN", t_in, method))
             events.append((ea, "OUT", t_out, "FACE"))
     day += timedelta(days=1)
 
+events = [e for e in events if not (e[1] == "OUT" and random.random() < 0.015)]
 ev_rows = []
 for ea, typ, t, method in sorted(events, key=lambda e: (e[0], e[2])):
     school = next(a[2] for a in assignments if a[0] == ea)
@@ -372,6 +374,24 @@ for school_id, _, _, _ in SCHOOLS:
     d = next(x for x in work_dates[3:] if (x.weekday() + 1) % 7 + 1 == p[4])
     lesson_exec_rows.append((p[0], d, "COMPENSATED", "عُوّضت بحصة إضافية يوم السبت", school_users[school_id][0]))
 insert("lesson_executions", ["timetable_period_id", "lesson_date", "status", "notes", "recorded_by"], lesson_exec_rows)
+
+# ---------------- outages (FR-ATT-18) and corrections (FR-ATT-12) ----------------
+outage_rows, correction_rows = [], []
+for school_id in (1, 3):
+    d = work_dates[4 if school_id == 1 else 7]
+    outage_rows.append((school_id, f"{d} 07:30:00+03", f"{d} 09:10:00+03", "POWER", "انقطاع كهرباء عام بالمنطقة",
+                        school_users[school_id][0]))
+for school_id, _, _, _ in SCHOOLS:
+    principal, deputy = school_users[school_id]
+    tchs = [a for a in assignments if a[2] == school_id and a[3] == "TEACHER"]
+    a_pending, a_done = tchs[0], tchs[1]
+    correction_rows.append((a_pending[0], str(work_dates[1]), "PRESENT", "كان المعلم بجولة صفية ونسي تسجيل الخروج",
+                            deputy, "PENDING", None, None))
+    correction_rows.append((a_done[0], str(work_dates[6]), "EXCUSED", "مراجعة طبية بموجب تقرير رسمي",
+                            deputy, "APPROVED", principal, f"{work_dates[5]} 10:00:00+03"))
+insert("power_outages", ["school_id", "starts_at", "ends_at", "outage_type", "notes", "recorded_by"], outage_rows)
+insert("attendance_corrections", ["employee_assignment_id", "work_date", "corrected_status", "reason", "proposed_by",
+                                  "status", "decided_by", "decided_at"], correction_rows)
 
 # ---------------- results (FR-DATA-07): one approved + one draft assessment per school ----------------
 assessments, grade_rows, approve_sql = [], [], []

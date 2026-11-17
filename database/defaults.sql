@@ -11,6 +11,8 @@ INSERT INTO settings (key, value, description) VALUES
   ('late_tolerance_minutes', '15', 'سماحية التأخير بالدقائق'),
   ('period_times', '{"1":"08:00","2":"08:45","3":"09:30","4":"10:30","5":"11:15","6":"12:00"}',
    'وقت بداية كل حصة (رقم الحصة → HH:MM)'),
-  ('work_days', '[1,2,3,4,5]', 'أيام الدوام: 1 = الأحد ... 7 = السبت')
+  ('work_days', '[1,2,3,4,5]', 'أيام الدوام: 1 = الأحد ... 7 = السبت'),
+  ('staff_work_hours', '{"start":"08:00","end":"13:30"}', 'دوام الكادر الإداري (غير المعلمين)'),
+  ('duplicate_event_window_minutes', '2', 'تجاهل حدث مكرر لنفس الموظف والنوع خلال هذه المدة (FR-ATT-08)')
 ON CONFLICT (key) DO NOTHING;
 COMMIT;
