@@ -14,6 +14,7 @@ import gradesRoutes from "./routes/grades.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
+import faceRoutes from "./routes/face.routes.js";
 
 const app = express();
 
@@ -28,7 +29,8 @@ app.use(
 );
 
 // Parse JSON requests
-app.use(express.json());
+// 6 MB: face check-in sends several camera frames as base64 JPEG
+app.use(express.json({ limit: "6mb" }));
 
 // API Routes
 app.use("/api/auth", authRoutes);
@@ -42,6 +44,7 @@ app.use("/api/grades", gradesRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/face", faceRoutes);
 
 // Test route
 app.get("/api/health", (req, res) => {

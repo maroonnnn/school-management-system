@@ -63,6 +63,22 @@ export const NAV_ITEMS: NavItem[] = [
     group: "schedule",
   },
   {
+    path: "/kiosk",
+    label: "جهاز الحضور",
+    icon: "bi-camera-video",
+    description: "تسجيل دخول وخروج الكادر بالتعرّف على الوجه على جهاز المدرسة.",
+    roles: ["SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF"],
+    group: "schedule",
+  },
+  {
+    path: "/face-enroll",
+    label: "تسجيل الوجوه",
+    icon: "bi-person-bounding-box",
+    description: "تسجيل وجه المعلمين والإداريين (متجه مشفّر فقط، بدون صور).",
+    roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "admin",
+  },
+  {
     path: "/my-attendance",
     label: "حضوري",
     icon: "bi-person-check",

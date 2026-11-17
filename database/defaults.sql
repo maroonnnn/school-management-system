@@ -13,6 +13,7 @@ INSERT INTO settings (key, value, description) VALUES
    'وقت بداية كل حصة (رقم الحصة → HH:MM)'),
   ('work_days', '[1,2,3,4,5]', 'أيام الدوام: 1 = الأحد ... 7 = السبت'),
   ('staff_work_hours', '{"start":"08:00","end":"13:30"}', 'دوام الكادر الإداري (غير المعلمين)'),
-  ('duplicate_event_window_minutes', '2', 'تجاهل حدث مكرر لنفس الموظف والنوع خلال هذه المدة (FR-ATT-08)')
+  ('duplicate_event_window_minutes', '2', 'تجاهل حدث مكرر لنفس الموظف والنوع خلال هذه المدة (FR-ATT-08)'),
+  ('face_match_threshold', '0.42', 'حد التطابق الوحيد (تشابه جيب التمام) لقبول التعرّف على الوجه (FR-ATT-05)')
 ON CONFLICT (key) DO NOTHING;
 COMMIT;

@@ -32,7 +32,7 @@
   - `hooks/useApi.ts` — `useApi<T>(path|null)` → { data, loading, error, reload } للقراءة. للكتابة استخدم apiFetch مباشرة.
   - `components/ui.tsx` — PageHeader, Alert, Loading, Field, SchoolPicker (للمديرية/الوزارة)، DuplicateWarning.
   - pages: LoginPage, HomePage, DirectorateRequests, MonthlyReport.
-- التشغيل: `.claude/launch.json` فيه backend (5000) و frontend (5173).
+- التشغيل: `.claude/launch.json` فيه backend (5000) و frontend (5173) و face (8001). بدون خدمة الوجه كل شي بيشتغل، بس `/kiosk` و`/face-enroll` بيرجّعوا "الخدمة غير متاحة — استخدم الإدخال اليدوي".
 - Git: repo خاص بالمشروع، فرع `main`. `.env` غير مرفوع (انظر `backend/.env.example`).
 - قاعدة البيانات: الـ schema الكامل في `database/schema.sql` (مُصدَّر بـ pg_dump من القاعدة الحقيقية). 24 جدول: ministries, directorates, schools, roles, users, employees, employee_assignments, teacher_profiles, students, student_enrollments, academic_years, grades, classes, sections, subjects, teaching_assignments, timetables, timetable_periods, attendance_events (+ trigger `validate_attendance_sequence`), assessments, school_requests, request_status_history, request_attachments, school_deputy_authorizations.
 - إعدادات النظام بجدول `settings` (key/jsonb): permanent_quota_rules، contract_lesson_rate، lesson_duration_minutes، late_tolerance_minutes. اقرأها من القاعدة، لا تكتب القيم بالكود.
@@ -103,7 +103,12 @@
 - [x] ATT-25..27: `GET /api/attendance/export?month=` (المدير فقط) → xlsx بـ exceljs، RTL، ورقتين (يومي: الاسم/الصفة/التاريخ/دخول/خروج + الأحداث الخام). **"الترحيل التلقائي" = الملف يتولّد من الأحداث المقبولة لحظة التنزيل** → دايماً محدّث ونسخة مشتقة (ATT-27). `services/attendanceExport.service.ts`.
 
 ### الأسبوع 3 (11-27 → 12-03): التعرّف على الوجه + الطلبات + المراسلات
-- [ ] ATT-01..05, 22, 24: تسجيل الوجه والتعرّف (متجه رقمي فقط، بدون حفظ صور)
+- [x] ATT-01..05, 22, 24 — التعرّف على الوجه:
+  - **`face-service/`** (Python 3.13، venv خاص بـ `face-service/.venv`، FastAPI على 127.0.0.1:8001، launch config اسمه `face`): OpenCV Zoo **YuNet** (كشف + 5 نقاط) + **SFace** (متجه 128). `POST /process {frames[], challenge}` → وجه واحد فقط، حيوية بتحدّي لف الرأس (yaw من نقاط العين/الأنف)، نفس الشخص بكل اللقطات، ويرجّع المتجه. الصور بالذاكرة فقط (NFR-07). النماذج بـ `face-service/models/` (مش مرفوعة على git — README فيه روابطها).
+  - Backend `routes/face.routes.ts` + `services/face.service.ts`: `GET /api/face/challenge` (اتجاه عشوائي موقّع JWT 90 ثانية مربوط بالمستخدم)، `POST /enroll` (المدير فقط، موظفي مدرسته — معلم وإداري)، `POST /check` (جهاز المدرسة: مدير/نائب/موظف؛ مقارنة بموظفي نفس المدرسة فقط، حد واحد `settings.face_match_threshold` = 0.42، دخول/خروج تلقائي حسب آخر حركة اليوم، تسجيل الحدث FACE مع match_score). المتجه مشفّر AES-256-GCM بمفتاح `FACE_KEY` بالـ .env (migration 007 جدول `face_embeddings`)، وما بينكتب بسجل التدقيق.
+  - الواجهة: `/face-enroll` (قائمة الكادر + حالة التسجيل + التسجيل بالكاميرا)، `/kiosk` (شاشة جهاز الحضور مع ساعة)، مكوّن `components/FaceCapture.tsx` (3 لقطات أمامية + 5 أثناء لف الرأس).
+  - الاختبار: 4 اختبارات وحدة للتشفير والتشابه (`npm test` = 22 كلها) + 12 حالة API (صلاحيات، توكن التحدي، رحلة backend→python). **ما انختبر بوجه حقيقي** — ما في كاميرا ببيئة Claude؛ لازم المستخدم يجرّب بمتصفحه.
+- [ ] NFR-03: معايرة الحد بجدول FAR/FRR على 10–15 متطوع (بعد تجربة المستخدم بالكاميرا). اتجاه لف الرأس حالياً متساهل (أي جهة مقبولة)؛ `FACE_STRICT_DIRECTION=1` بيفرض الجهة المطلوبة بعد التأكد من الإشارة بكاميرا حقيقية.
 - [ ] ATT-21: تخزين محلي عند انقطاع الإنترنت ثم مزامنة
 - [ ] طلب إنشاء حساب معلم: المدير يرفع الطلب → المديرية تعطي الرقم الوظيفي وكلمة المرور (وإزالة إنشاء حساب المعلم المباشر من المدير)
 - [ ] REQ: إكمال الحالات، المرفقات، التعليقات، الإعادة، الإغلاق، الأولوية الموزونة (15..18, ALG-02..04)
@@ -129,6 +134,8 @@
 | 2026-11-17 | الحضور: تجاهل التكرار خلال دقيقتين وقبول IN→IN بدل رفضه | ATT-08 + BR-05 (الـ trigger القديم كان يخالفها) |
 | 2026-11-17 | تصحيح الحضور الذي يقترحه المدير تعتمده المديرية | ATT-13 يمنع الاعتماد الذاتي |
 | 2026-11-17 | ملف Excel الشهري يتولّد عند الطلب من الأحداث الخام (exceljs) | ATT-25/27: دايماً محدّث ونسخة مشتقة |
+| 2026-11-17 | الوجه: خدمة Python (OpenCV YuNet+SFace) بدل الحساب بالمتصفح — الصورة تُعالج بالخادم وتُتلف فوراً | اختيار المستخدم؛ يُعدَّل نص FR-ATT-03 بملحق التغييرات |
+| 2026-11-17 | الحيوية: تحدّي لف الرأس بجهة عشوائية من الخادم | اختيار المستخدم (ATT-22) |
 | 2026-11-13 | القاعدة أُنشئت يدوياً بـ pgAdmin → نستخرجها بـ `pg_dump --schema-only` إلى `database/schema.sql` ونكمل بملفات migration | توثيق وإمكانية إعادة البناء |
 
 ## أجوبة المستخدم على المتطلبات الجديدة (2026-11-13)
@@ -174,3 +181,4 @@
 - 2026-11-17: المستخدم طلب تحسين الشكل قبل ATT → theme.css بالهوية السورية، خط Cairo محلي، layout/login جديدين، لوحة مؤشرات بالرئيسية. مُختبر: summary لـ 6 أدوار عبر API، المتصفح (principal1): بدون overflow على 1024 و375px، بدون أخطاء console. التالي: ATT.
 - 2026-11-17: ATT-06..19 + 25..27 خلص. migration 006، مصنّف الحضور (18 اختبار وحدة)، صفحتين، Excel. seed فيه: نسيان خروج (~1.5%)، انقطاعين، 10 تصحيحات. إصلاح seed: الإداريين كانوا يطلعوا قبل 13:30 (كان يطلع خروج مبكر كتير). مُختبر: 6 قواعد بالقاعدة + 36 حالة API + 3 لاعتماد المديرية + المتصفح (principal1 /attendance، t1006 /my-attendance) + فحص ملف Excel. إصلاح واجهة: زر الاعتماد كان يظهر للمقترح نفسه (bigint كنص). **الأسبوع 2 خلص (قبل موعده بـ 9 أيام).**
 - 2026-11-17: المستخدم سأل ليش ما في landing page (كانت مخطّطة للأسبوع 4) → انعملت هلق. مُختبر بالمتصفح: `/` → `/welcome`، أزرار الدخول والرجوع، بدون overflow على 375px. التالي: الأسبوع 3 — التعرّف على الوجه (خدمة Python) + المزامنة دون اتصال.
+- 2026-11-17: landing page + التعرّف على الوجه خلصوا (face-service + migration 007 + صفحتين). المستخدم وافق على تنزيل حزم PyPI ونماذج OpenCV Zoo. **ما انختبر بوجه حقيقي.** التالي: المستخدم يجرّب `/face-enroll` و`/kiosk` بكاميرته، بعدها ATT-21 (دون اتصال) ثم الطلبات REQ.
