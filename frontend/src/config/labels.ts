@@ -65,3 +65,20 @@ export const CORRECTION_STATE: Record<string, { label: string; cls: string }> = 
 export const POSITION_LABELS: Record<string, string> = {
   TEACHER: "معلم", PRINCIPAL: "مدير", DEPUTY: "نائب مدير", ADMINISTRATIVE: "إداري", SUPERVISOR: "موجّه",
 };
+
+export const REQUEST_STATUS: Record<string, { label: string; cls: string }> = {
+  DRAFT: { label: "مسودة", cls: "text-bg-light border" },
+  SUBMITTED: { label: "تم التقديم", cls: "text-bg-info" },
+  UNDER_REVIEW: { label: "قيد المراجعة", cls: "text-bg-primary" },
+  RETURNED: { label: "مُعاد للتوضيح", cls: "text-bg-warning" },
+  APPROVED: { label: "مقبول", cls: "text-bg-success" },
+  REJECTED: { label: "مرفوض", cls: "text-bg-danger" },
+  IN_PROGRESS: { label: "قيد التنفيذ", cls: "text-bg-primary" },
+  COMPLETED: { label: "تم التنفيذ", cls: "text-bg-success" },
+  CLOSED: { label: "مغلق", cls: "text-bg-secondary" },
+};
+
+export const REQUEST_TYPE: Record<string, string> = {
+  MAINTENANCE: "صيانة", TEXTBOOKS: "كتب ووسائل", FURNITURE: "مقاعد وتجهيزات", COMPUTERS: "أجهزة",
+  TEACHERS: "نقص كادر", OTHER: "أخرى", TEACHER_ACCOUNT: "إنشاء حساب معلم",
+};

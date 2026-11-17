@@ -36,11 +36,12 @@ function SettingsPage() {
 
   const rules = ((valueOf("permanent_quota_rules") as Rule[]) ?? []).slice().sort((a, b) => a.minYears - b.minYears);
   const times = (valueOf("period_times") as Record<string, string>) ?? {};
+  const weights = (valueOf("request_priority_weights") as Record<string, number>) ?? {};
   const saveBtn = (k: string) => canEdit ? <button className="btn btn-sm btn-primary" disabled={!(k in drafts)} onClick={() => save(k)}>حفظ</button> : null;
 
   return (
     <div className="container-fluid p-3 p-lg-4" style={{ maxWidth: 900 }}>
-      <PageHeader title="إعدادات النصاب والحصص" subtitle={canEdit ? "تُطبّق على كل المدارس فوراً" : "عرض فقط — التعديل للمديرية"} />
+      <PageHeader title="إعدادات النظام" subtitle={canEdit ? "تُطبّق على كل المدارس فوراً" : "عرض فقط — التعديل للمديرية"} />
       <Alert kind="success">{msg.ok}</Alert>
       <Alert kind="danger">{msg.err}</Alert>
 
@@ -81,6 +82,41 @@ function SettingsPage() {
             <div className="d-flex gap-2">
               <input type="number" min={0} max={120} className="form-control" disabled={!canEdit} value={Number(valueOf("late_tolerance_minutes"))} onChange={(e) => setDraft("late_tolerance_minutes", Number(e.target.value))} />
               {saveBtn("late_tolerance_minutes")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card border-0 shadow-sm rounded-4 mb-3">
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h2 className="h6 fw-bold mb-0">أوزان أولوية طلبات المدارس</h2>
+            {saveBtn("request_priority_weights")}
+          </div>
+          <div className="row g-2">
+            {([["severity", "الخطورة"], ["affected", "عدد المتأثرين"], ["waiting", "مدة الانتظار"], ["fragility", "هشاشة المدرسة"], ["repetition", "تكرار الطلب"]] as const).map(([k, label]) => (
+              <div className="col-6 col-md" key={k}>
+                <label className="form-label small mb-0">{label}</label>
+                <input type="number" min={0} max={1} step={0.05} className="form-control form-control-sm" disabled={!canEdit}
+                  value={weights[k] ?? 0} onChange={(e) => setDraft("request_priority_weights", { ...weights, [k]: Number(e.target.value) })} />
+              </div>
+            ))}
+          </div>
+          <p className="small text-secondary mt-2 mb-3">تُطبَّع الأوزان تلقائياً (لا يلزم أن يكون مجموعها 1). الدرجة أداة ترتيب فقط ولا تقبل أو ترفض أي طلب.</p>
+          <div className="row g-3 align-items-end">
+            <div className="col-md-5">
+              <label className="form-label small fw-semibold">يُعتبر الطلب متأخراً بعد (يوم)</label>
+              <div className="d-flex gap-2">
+                <input type="number" min={1} max={60} className="form-control" disabled={!canEdit} value={Number(valueOf("request_overdue_days"))} onChange={(e) => setDraft("request_overdue_days", Number(e.target.value))} />
+                {saveBtn("request_overdue_days")}
+              </div>
+            </div>
+            <div className="col-md-5">
+              <label className="form-label small fw-semibold">حد تطابق الوجه (0.2 – 0.9)</label>
+              <div className="d-flex gap-2">
+                <input type="number" min={0.2} max={0.9} step={0.01} className="form-control" disabled={!canEdit} value={Number(valueOf("face_match_threshold"))} onChange={(e) => setDraft("face_match_threshold", Number(e.target.value))} />
+                {saveBtn("face_match_threshold")}
+              </div>
             </div>
           </div>
         </div>

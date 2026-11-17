@@ -211,3 +211,9 @@ body { font-family: var(--bs-body-font-family); background: var(--brand-surface)
 .kiosk-result { border-radius: 1rem; padding: 1.5rem; text-align: center; }
 .kiosk-result.ok { background: var(--brand-green-50); border: 2px solid var(--brand-green-600); }
 .kiosk-result.fail { background: #fdf2f2; border: 2px solid #dc3545; }
+
+/* ---------- notifications ---------- */
+.notif-panel { position: absolute; top: 120%; inset-inline-end: 0; width: min(360px, 90vw); background: #fff; color: var(--brand-ink); z-index: 1050; border: 1px solid var(--brand-border); }
+.notif-item { display: block; width: 100%; text-align: start; border: 0; background: #fff; padding: .6rem 1rem; border-bottom: 1px solid var(--brand-border); }
+.notif-item:hover { background: var(--brand-green-50); }
+.notif-item.unread { background: var(--brand-gold-50); border-inline-start: 3px solid var(--brand-gold-500); }

@@ -112,9 +112,9 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     path: "/settings",
-    label: "إعدادات النصاب",
+    label: "الإعدادات",
     icon: "bi-sliders",
-    description: "شرائح نصاب المثبّت، أجر حصة الوكيل، أوقات الحصص.",
+    description: "شرائح النصاب، أوقات الحصص، أوزان أولوية الطلبات، حد تطابق الوجه.",
     roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL"],
     group: "admin",
   },
@@ -140,6 +140,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "bi-bar-chart-line",
     description: "عرض ملخص الحضور والتفاصيل الشهرية للمعلم وطباعتها.",
     roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
+    group: "followup",
+  },
+  {
+    path: "/requests",
+    label: "طلبات المدرسة",
+    icon: "bi-send",
+    description: "تقديم طلبات الصيانة والتجهيزات والكادر وحسابات المعلمين للمديرية ومتابعتها.",
+    roles: ["SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
     group: "followup",
   },
   {

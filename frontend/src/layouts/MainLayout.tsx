@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { NAV_GROUPS, NAV_ITEMS, canAccess } from "../config/navigation";
 import { roleLabels } from "../types/auth";
+import NotificationBell from "../components/NotificationBell";
 
 function MainLayout() {
   const { user, logout } = useAuth();
@@ -55,6 +56,7 @@ function MainLayout() {
             </div>
           </div>
           <div className="d-flex align-items-center gap-3">
+            {(user?.role === "SCHOOL_PRINCIPAL" || user?.role === "SCHOOL_DEPUTY" || user?.role === "DIRECTORATE_ADMIN") && <NotificationBell />}
             <div className="text-end d-none d-sm-block topbar-user">
               <div className="fw-semibold">{user?.fullName}</div>
               <small>{user && roleLabels[user.role]}</small>

@@ -338,31 +338,46 @@ REQ_SAMPLES = [
     ("COMPUTERS", "أجهزة مخبر المعلوماتية", "5 أجهزة معطّلة في المخبر"),
     ("OTHER", "تأمين مياه الشرب", "عطل في خزان المياه"),
 ]
-FLOW = ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "IN_PROGRESS", "COMPLETED"]
-req_rows, hist_rows = [], []
+FLOW = ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "IN_PROGRESS", "COMPLETED", "CLOSED"]
+FINALS = ["SUBMITTED", "UNDER_REVIEW", "UNDER_REVIEW", "APPROVED", "IN_PROGRESS", "COMPLETED", "CLOSED", "REJECTED", "RETURNED", "DRAFT"]
+req_rows, hist_rows, comment_rows = [], [], []
 for school_id, _, _, _ in SCHOOLS:
     p_user = school_users[school_id][0]
-    for k in range(3):
+    for k in range(4):
         typ, title, desc = random.choice(REQ_SAMPLES)
         rid = nid("req")
-        created = datetime(2026, 10, random.randint(1, 28), 9, random.randint(0, 59))
-        final = random.choice(FLOW + ["REJECTED", "DRAFT"])
-        req_rows.append((rid, f"REQ-{created:%Y%m%d}-{rid:08d}", school_id, p_user, typ, title, desc, final,
+        created = datetime(2026, 10, random.randint(5, 30), 9, random.randint(0, 59)) if k < 3 else datetime(2026, 11, random.randint(1, 11), 10, 0)
+        final = random.choice(FINALS)
+        severity, affected = random.randint(1, 5), random.choice([0, 15, 25, 50, 150])
+        req_rows.append((rid, f"REQ-{created:%Y%m%d}-{rid:06d}", school_id, p_user, typ, title, desc, final, severity, affected,
                          None if final == "DRAFT" else created.strftime("%Y-%m-%d %H:%M:%S") + "+03",
                          created.strftime("%Y-%m-%d %H:%M:%S") + "+03"))
         hist_rows.append((rid, None, "DRAFT", p_user, None, created))
         if final == "DRAFT":
             continue
-        path = FLOW[:2] + ["REJECTED"] if final == "REJECTED" else FLOW[:FLOW.index(final) + 1]
+        if final == "REJECTED":
+            path = ["SUBMITTED", "UNDER_REVIEW", "REJECTED"]
+        elif final == "RETURNED":
+            path = ["SUBMITTED", "UNDER_REVIEW", "RETURNED"]
+        else:
+            path = FLOW[:FLOW.index(final) + 1]
         prev, t = "DRAFT", created
         for st in path:
             t += timedelta(days=random.randint(1, 3))
-            by = p_user if st == "SUBMITTED" else dir_user
-            hist_rows.append((rid, prev, st, by, "لا تتوفر ميزانية حالياً" if st == "REJECTED" else None, t))
+            by = p_user if st in ("SUBMITTED", "CLOSED") else dir_user
+            note = {"REJECTED": "لا تتوفر ميزانية حالياً لهذا البند", "RETURNED": "يرجى إرفاق صورة توضّح حجم الضرر وعدد الصفوف المتأثرة",
+                    "CLOSED": "تم استلام التنفيذ، شكراً"}.get(st)
+            hist_rows.append((rid, prev, st, by, note, t))
             prev = st
-insert("school_requests", ["id", "request_number", "school_id", "created_by", "request_type", "title", "description", "status", "submitted_at", "created_at"], req_rows)
+        if final in ("UNDER_REVIEW", "IN_PROGRESS"):
+            comment_rows.append((rid, dir_user, "تم التواصل مع قسم الأبنية المدرسية لتقدير الكلفة", t + timedelta(hours=2)))
+            comment_rows.append((rid, p_user, "شكراً، الوضع يتفاقم مع بداية الشتاء", t + timedelta(hours=26)))
+insert("school_requests", ["id", "request_number", "school_id", "created_by", "request_type", "title", "description", "status",
+                           "severity", "affected_students", "submitted_at", "created_at"], req_rows)
 insert("request_status_history", ["request_id", "old_status", "new_status", "changed_by", "notes", "changed_at"],
        [(r, o, n, b, note, t.strftime("%Y-%m-%d %H:%M:%S") + "+03") for r, o, n, b, note, t in hist_rows])
+insert("request_comments", ["request_id", "author_id", "body", "created_at"],
+       [(r, a, b, t.strftime("%Y-%m-%d %H:%M:%S") + "+03") for r, a, b, t in comment_rows])
 
 insert("employee_leaves", ["employee_id", "leave_type", "start_date", "end_date", "notes", "created_by"], leave_rows)
 

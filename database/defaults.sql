@@ -14,6 +14,9 @@ INSERT INTO settings (key, value, description) VALUES
   ('work_days', '[1,2,3,4,5]', 'أيام الدوام: 1 = الأحد ... 7 = السبت'),
   ('staff_work_hours', '{"start":"08:00","end":"13:30"}', 'دوام الكادر الإداري (غير المعلمين)'),
   ('duplicate_event_window_minutes', '2', 'تجاهل حدث مكرر لنفس الموظف والنوع خلال هذه المدة (FR-ATT-08)'),
-  ('face_match_threshold', '0.42', 'حد التطابق الوحيد (تشابه جيب التمام) لقبول التعرّف على الوجه (FR-ATT-05)')
+  ('face_match_threshold', '0.42', 'حد التطابق الوحيد (تشابه جيب التمام) لقبول التعرّف على الوجه (FR-ATT-05)'),
+  ('request_priority_weights', '{"severity":0.30,"affected":0.20,"waiting":0.20,"fragility":0.15,"repetition":0.15}',
+   'أوزان عوامل أولوية الطلب (FR-REQ-16, FR-ALG-02)'),
+  ('request_overdue_days', '7', 'يُعتبر الطلب المفتوح متأخراً بعد هذا العدد من الأيام (FR-REQ-16)')
 ON CONFLICT (key) DO NOTHING;
 COMMIT;

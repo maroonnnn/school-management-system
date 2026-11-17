@@ -102,7 +102,7 @@ router.get(
           JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
           WHERE c.school_id = $1 AND a.status = 'SUBMITTED'`, [u.schoolId]);
       await q("my_requests_open",
-        `SELECT COUNT(*) n FROM school_requests WHERE school_id = $1 AND status NOT IN ('COMPLETED', 'REJECTED')`, [u.schoolId]);
+        `SELECT COUNT(*) n FROM school_requests WHERE school_id = $1 AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'IN_PROGRESS', 'COMPLETED')`, [u.schoolId]);
     }
     if (u.role === "SUPERVISOR") {
       await q("grades_draft",

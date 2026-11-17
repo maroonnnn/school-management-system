@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict XcWBf2sOHjT1A9QkE8Fmz9mdSQfytLMtpxl2Lu1qyr7U3Kx9ddl0DdRydNhqv6F
+\restrict wY8ls3DVc8zjHQYrZY1KHA8iOuaHZBZB5YsiGlSG5mDFx0k3DlrWhLZjvwyQ85K
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -698,6 +698,48 @@ ALTER TABLE public.ministries ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: notification_reads; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notification_reads (
+    notification_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    read_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notifications (
+    id bigint NOT NULL,
+    school_id bigint,
+    directorate_id bigint,
+    title character varying(200) NOT NULL,
+    body text,
+    link character varying(200),
+    request_id bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_notification_target CHECK (((school_id IS NOT NULL) OR (directorate_id IS NOT NULL)))
+);
+
+
+--
+-- Name: notifications_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.notifications ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.notifications_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: power_outages; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -761,6 +803,34 @@ ALTER TABLE public.request_attachments ALTER COLUMN id ADD GENERATED ALWAYS AS I
 
 
 --
+-- Name: request_comments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.request_comments (
+    id bigint NOT NULL,
+    request_id bigint NOT NULL,
+    author_id bigint NOT NULL,
+    body text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_comment_body CHECK ((length(TRIM(BOTH FROM body)) > 0))
+);
+
+
+--
+-- Name: request_comments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.request_comments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.request_comments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: request_status_history; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -772,8 +842,8 @@ CREATE TABLE public.request_status_history (
     changed_by bigint NOT NULL,
     notes text,
     changed_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT chk_history_new_status CHECK (((new_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))),
-    CONSTRAINT chk_history_old_status CHECK (((old_status IS NULL) OR ((old_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))))
+    CONSTRAINT chk_history_new_status CHECK (((new_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))),
+    CONSTRAINT chk_history_old_status CHECK (((old_status IS NULL) OR ((old_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))))
 );
 
 
@@ -866,10 +936,26 @@ CREATE TABLE public.school_requests (
     submitted_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    severity smallint DEFAULT 3 NOT NULL,
+    affected_students integer DEFAULT 0 NOT NULL,
+    assigned_department character varying(150),
+    assigned_to bigint,
+    target_employee_id bigint,
+    closed_at timestamp with time zone,
+    CONSTRAINT chk_account_request_target CHECK ((((request_type)::text <> 'TEACHER_ACCOUNT'::text) OR (target_employee_id IS NOT NULL))),
     CONSTRAINT chk_priority_score CHECK (((priority_score IS NULL) OR ((priority_score >= (0)::numeric) AND (priority_score <= (100)::numeric)))),
-    CONSTRAINT chk_school_request_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text]))),
-    CONSTRAINT chk_school_request_type CHECK (((request_type)::text = ANY (ARRAY[('MAINTENANCE'::character varying)::text, ('TEACHERS'::character varying)::text, ('TEXTBOOKS'::character varying)::text, ('FURNITURE'::character varying)::text, ('COMPUTERS'::character varying)::text, ('OTHER'::character varying)::text])))
+    CONSTRAINT chk_request_affected CHECK ((affected_students >= 0)),
+    CONSTRAINT chk_request_severity CHECK (((severity >= 1) AND (severity <= 5))),
+    CONSTRAINT chk_school_request_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))),
+    CONSTRAINT chk_school_request_type CHECK (((request_type)::text = ANY ((ARRAY['MAINTENANCE'::character varying, 'TEACHERS'::character varying, 'TEXTBOOKS'::character varying, 'FURNITURE'::character varying, 'COMPUTERS'::character varying, 'OTHER'::character varying, 'TEACHER_ACCOUNT'::character varying])::text[])))
 );
+
+
+--
+-- Name: COLUMN school_requests.priority_score; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.school_requests.priority_score IS 'غير مستخدم — الأولوية تُحسب عند العرض (FR-ALG-04)';
 
 
 --
@@ -1351,6 +1437,22 @@ ALTER TABLE ONLY public.ministries
 
 
 --
+-- Name: notification_reads notification_reads_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_reads
+    ADD CONSTRAINT notification_reads_pkey PRIMARY KEY (notification_id, user_id);
+
+
+--
+-- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: power_outages power_outages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1364,6 +1466,14 @@ ALTER TABLE ONLY public.power_outages
 
 ALTER TABLE ONLY public.request_attachments
     ADD CONSTRAINT request_attachments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: request_comments request_comments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_comments
+    ADD CONSTRAINT request_comments_pkey PRIMARY KEY (id);
 
 
 --
@@ -1749,6 +1859,20 @@ CREATE INDEX idx_leaves_employee_dates ON public.employee_leaves USING btree (em
 
 
 --
+-- Name: idx_notifications_directorate; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_directorate ON public.notifications USING btree (directorate_id, created_at DESC);
+
+
+--
+-- Name: idx_notifications_school; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_school ON public.notifications USING btree (school_id, created_at DESC);
+
+
+--
 -- Name: idx_outages_school_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1760,6 +1884,13 @@ CREATE INDEX idx_outages_school_time ON public.power_outages USING btree (school
 --
 
 CREATE INDEX idx_period_timetable ON public.timetable_periods USING btree (timetable_id);
+
+
+--
+-- Name: idx_request_comments; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_request_comments ON public.request_comments USING btree (request_id, created_at);
 
 
 --
@@ -2192,6 +2323,46 @@ ALTER TABLE ONLY public.lesson_executions
 
 
 --
+-- Name: notification_reads notification_reads_notification_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_reads
+    ADD CONSTRAINT notification_reads_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notifications(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notification_reads notification_reads_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_reads
+    ADD CONSTRAINT notification_reads_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: notifications notifications_directorate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_directorate_id_fkey FOREIGN KEY (directorate_id) REFERENCES public.directorates(id);
+
+
+--
+-- Name: notifications notifications_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.school_requests(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notifications notifications_school_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id);
+
+
+--
 -- Name: power_outages power_outages_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2221,6 +2392,22 @@ ALTER TABLE ONLY public.request_attachments
 
 ALTER TABLE ONLY public.request_attachments
     ADD CONSTRAINT request_attachments_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+
+
+--
+-- Name: request_comments request_comments_author_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_comments
+    ADD CONSTRAINT request_comments_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.users(id);
+
+
+--
+-- Name: request_comments request_comments_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.request_comments
+    ADD CONSTRAINT request_comments_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.school_requests(id) ON DELETE CASCADE;
 
 
 --
@@ -2264,6 +2451,14 @@ ALTER TABLE ONLY public.school_deputy_authorizations
 
 
 --
+-- Name: school_requests school_requests_assigned_to_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id);
+
+
+--
 -- Name: school_requests school_requests_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2277,6 +2472,14 @@ ALTER TABLE ONLY public.school_requests
 
 ALTER TABLE ONLY public.school_requests
     ADD CONSTRAINT school_requests_school_id_fkey FOREIGN KEY (school_id) REFERENCES public.schools(id);
+
+
+--
+-- Name: school_requests school_requests_target_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.school_requests
+    ADD CONSTRAINT school_requests_target_employee_id_fkey FOREIGN KEY (target_employee_id) REFERENCES public.employees(id);
 
 
 --
@@ -2323,5 +2526,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict XcWBf2sOHjT1A9QkE8Fmz9mdSQfytLMtpxl2Lu1qyr7U3Kx9ddl0DdRydNhqv6F
+\unrestrict wY8ls3DVc8zjHQYrZY1KHA8iOuaHZBZB5YsiGlSG5mDFx0k3DlrWhLZjvwyQ85K
 
