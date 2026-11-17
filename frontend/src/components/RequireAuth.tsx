@@ -10,10 +10,16 @@ interface Props {
 
 /** Redirects to /login when signed out; shows 403 when the role is not allowed. */
 function RequireAuth({ children, roles = "ALL" }: Props) {
-  const { user } = useAuth();
+  const { user, logoutReason } = useAuth();
   const location = useLocation();
 
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  // Visitors opening the site root see the public landing page; deep links go straight to sign-in
+  if (!user) {
+    // after a forced logout (idle/expired) go to /login, which shows the reason
+    return location.pathname === "/" && !logoutReason
+      ? <Navigate to="/welcome" replace />
+      : <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
 
   if (roles !== "ALL" && !roles.includes(user.role)) {
     return (

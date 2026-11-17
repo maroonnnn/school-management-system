@@ -5,6 +5,7 @@ import MainLayout from "./layouts/MainLayout";
 import { NAV_ITEMS } from "./config/navigation";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
+import LandingPage from "./pages/LandingPage";
 import MonthlyReport from "./pages/MonthlyReport";
 import DirectorateRequests from "./pages/DirectorateRequests";
 import SchoolsPage from "./pages/SchoolsPage";
@@ -26,6 +27,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/welcome" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route
             element={

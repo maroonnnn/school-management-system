@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function LoginPage() {
@@ -48,6 +48,7 @@ function LoginPage() {
 
       <section className="login-form-side">
         <div className="login-card-new">
+          <Link to="/welcome" className="small text-decoration-none d-inline-block mb-3"><i className="bi bi-arrow-right ms-1"></i>الصفحة الرئيسية</Link>
           <h2 className="h4 fw-bold brand-title mb-1">تسجيل الدخول</h2>
           <span className="gold-rule mb-3"></span>
           <p className="text-secondary mb-4">أدخل بيانات حسابك للمتابعة.</p>

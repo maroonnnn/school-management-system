@@ -178,3 +178,27 @@ body { font-family: var(--bs-body-font-family); background: var(--brand-surface)
 /* ---------- misc ---------- */
 .timetable-cell.editable:hover { outline-color: var(--brand-green-600) !important; }
 .badge.text-bg-primary { background-color: var(--brand-green-700) !important; }
+
+/* ---------- landing page ---------- */
+.landing { background: var(--brand-surface); min-height: 100vh; }
+.landing-nav {
+  position: sticky; top: 0; z-index: 10;
+  background: linear-gradient(90deg, var(--brand-green-950) 0%, var(--brand-green-800) 100%);
+  border-bottom: 3px solid var(--brand-gold-500);
+}
+.landing-hero {
+  color: #fff; position: relative; overflow: hidden;
+  background: radial-gradient(110% 130% at 100% 0%, var(--brand-green-700) 0%, var(--brand-green-900) 50%, var(--brand-green-950) 100%);
+}
+.landing-hero::after {
+  content: ""; position: absolute; inset: auto 0 0 0; height: 4px;
+  background: linear-gradient(90deg, transparent, var(--brand-gold-500), transparent);
+}
+.landing-hero h1 { line-height: 1.35; }
+.landing-emblem {
+  width: min(300px, 70vw); aspect-ratio: 1; border-radius: 50%; object-fit: cover;
+  box-shadow: 0 0 0 8px rgba(185, 162, 106, .22), 0 24px 60px rgba(0, 0, 0, .35);
+}
+.landing-band { background: #fff; border-top: 1px solid var(--brand-border); border-bottom: 1px solid var(--brand-border); }
+.landing-cta { color: #fff; background: linear-gradient(120deg, var(--brand-green-900), var(--brand-green-700)); border: 1px solid rgba(185, 162, 106, .4); }
+.landing-footer { background: var(--brand-green-950); color: rgba(255, 255, 255, .7); border-top: 3px solid var(--brand-gold-500); }
