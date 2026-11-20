@@ -122,6 +122,33 @@ function SettingsPage() {
         </div>
       </div>
 
+      {([
+        ["school_performance_weights", "أوزان مؤشر أداء المدرسة", [["attendance", "الحضور"], ["quota", "إنجاز النصاب"], ["requests", "سرعة معالجة الطلبات"], ["results", "مستوى المحصّلات"]]],
+        ["school_need_weights", "أوزان مؤشر الاحتياج المركّب", [["shortage", "نقص الكادر"], ["absence", "الغياب"], ["overdue", "الطلبات المتأخرة"], ["decline", "تراجع النتائج"]]],
+      ] as const).map(([key, title, fields]) => {
+        const w = (valueOf(key) as Record<string, number>) ?? {};
+        return (
+          <div className="card border-0 shadow-sm rounded-4 mb-3" key={key}>
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h2 className="h6 fw-bold mb-0">{title}</h2>
+                {saveBtn(key)}
+              </div>
+              <div className="row g-2">
+                {fields.map(([k, label]) => (
+                  <div className="col-6 col-md" key={k}>
+                    <label className="form-label small mb-0">{label}</label>
+                    <input type="number" min={0} max={1} step={0.05} className="form-control form-control-sm" disabled={!canEdit}
+                      value={w[k] ?? 0} onChange={(e) => setDraft(key, { ...w, [k]: Number(e.target.value) })} />
+                  </div>
+                ))}
+              </div>
+              <p className="small text-secondary mt-2 mb-0">تُطبَّع الأوزان تلقائياً. المؤشر لدعم القرار فقط (صفحة التحليلات الذكية).</p>
+            </div>
+          </div>
+        );
+      })}
+
       <div className="card border-0 shadow-sm rounded-4">
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-center mb-2">

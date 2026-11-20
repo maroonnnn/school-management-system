@@ -335,6 +335,7 @@ export async function requestsReport(schoolIds: number[] | null, from: string, t
 interface CentralRow {
   schoolId: number; schoolName: string; stage: number; directorateId: number; directorateName: string;
   students: number; teachers: number; staff: number; attendanceRate: number | null; possibleAbsenceDays: number; lateDays: number;
+  possibleAbsenceRate: number | null;
   quotaCompletion: number | null; requestsOpen: number; requestsOverdue: number; avgDaysToDecision: number | null;
   outages: number; resultsAverage: number | null; resultsSubmitted: number; resultsDue: number; staffShortage: number; _dc: DayCounts; _due: number; _executed: number;
 }
@@ -391,6 +392,7 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
       schoolId: Number(s.id), schoolName: s.name, stage: s.stage, directorateId: Number(s.directorate_id), directorateName: s.directorate_name,
       students: s.students, teachers: s.teachers, staff: s.staff,
       attendanceRate: dc.attendanceRate, possibleAbsenceDays: dc.possibleAbsence, lateDays: dc.late,
+      possibleAbsenceRate: dc.dutyDays ? round1(((dc.possibleAbsence + dc.absent) / dc.dutyDays) * 100) : null,
       quotaCompletion: due ? round1(Math.min(executed / due, 1) * 100) : null,
       requestsOpen: rq?.open ?? 0, requestsOverdue: rq?.overdue ?? 0, avgDaysToDecision: rq?.avgDaysToDecision ?? null,
       outages: s.outages, resultsAverage: s.results_average,

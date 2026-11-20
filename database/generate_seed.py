@@ -10,7 +10,7 @@ from pathlib import Path
 random.seed(2026)
 OUT = Path(__file__).with_name("seed.sql")
 PWD_HASH = "$2b$10$SAKUlO8Oz4TTGlHoKAhODOV6ol.mZx4rI7KLzszf7sSfowAnTAJmq"  # Test@1234
-TODAY = date(2026, 11, 12)
+TODAY = date(2026, 11, 19)  # last day with attendance data — move forward before the demo and rebuild
 YEAR_START = date(2026, 9, 1)
 
 sql: list[str] = []
@@ -287,6 +287,17 @@ ta_ea = {ta[0]: ta[1] for ta in teaching}
 lesson_slots = {}  # ea -> {day_of_week: [period numbers]}
 for p in periods:
     lesson_slots.setdefault(ta_ea[p[2]], {}).setdefault(p[4], []).append(p[5])
+# Deliberate anomalies for the AI alerts demo (algorithms/attendanceAnomalies.ts), relative to TODAY:
+ea_school = {a[0]: a[2] for a in assignments}
+perm_teachers = lambda sid: [a[0] for a in assignments if a[2] == sid and a[3] == "TEACHER" and a[0] not in contract_eas
+                              and all(e != a[1] for e, _ in on_leave)]
+ANOM_ABSENT_EA = perm_teachers(1)[1]           # ALG-07: absent 4 duty days in a row (no leave)
+ANOM_ABSENT_DAYS = {TODAY - timedelta(days=k) for k in range(1, 5)}
+ANOM_LATE_EA = next(ea for ea in perm_teachers(2) if 1 in lesson_slots.get(ea, {}).get(3, []))  # teaches period 1 on Tuesday (dow 3) → late every Tuesday, last 5 weeks
+ANOM_INC_EA = next(ea for ea, pos in all_staff if pos == "ADMINISTRATIVE" and ea_school[ea] == 4)  # forgets to check out
+ANOM_INC_DAYS = {TODAY - timedelta(days=k) for k in (2, 9, 15)}
+SPIKE_SCHOOL, SPIKE_FROM = 3, TODAY - timedelta(days=TODAY.weekday() + 1 + 7)  # ALG-11: last two weeks (Sun..)
+
 events = []
 day = YEAR_START
 while day <= TODAY:
@@ -294,7 +305,10 @@ while day <= TODAY:
         dow = (day.weekday() + 1) % 7 + 1  # Sun=1 .. Thu=5
         for ea, pos in all_staff:
             r = random.random()
-            if r < 0.04 or (ea_emp.get(ea), day) in on_leave:
+            absent_p = 0.25 if ea_school[ea] == SPIKE_SCHOOL and day >= SPIKE_FROM else 0.04
+            if ea == ANOM_ABSENT_EA and day in ANOM_ABSENT_DAYS:
+                continue
+            if r < absent_p or (ea_emp.get(ea), day) in on_leave:
                 continue  # absent / on leave
             if ea in contract_eas:
                 # contract teachers come only on days they teach at this school, around their lessons
@@ -307,7 +321,7 @@ while day <= TODAY:
                 events.append((ea, "IN", first - timedelta(minutes=random.randint(5, 15) - late_min), "FACE"))
                 events.append((ea, "OUT", last + timedelta(minutes=random.randint(2, 10)), "FACE"))
                 continue
-            late = r < 0.14
+            late = r < 0.14 or (ea == ANOM_LATE_EA and day.weekday() == 1 and day > TODAY - timedelta(days=35))
             t_in = datetime.combine(day, datetime.min.time()) + timedelta(
                 hours=7, minutes=random.randint(35, 58) + (random.randint(20, 60) if late else 0))
             leave_early = random.random() < 0.05
@@ -319,7 +333,7 @@ while day <= TODAY:
             events.append((ea, "OUT", t_out, "FACE"))
     day += timedelta(days=1)
 
-events = [e for e in events if not (e[1] == "OUT" and random.random() < 0.015)]
+events = [e for e in events if not (e[1] == "OUT" and (random.random() < 0.015 or (e[0] == ANOM_INC_EA and e[2].date() in ANOM_INC_DAYS)))]
 ev_rows = []
 for ea, typ, t, method in sorted(events, key=lambda e: (e[0], e[2])):
     school = next(a[2] for a in assignments if a[0] == ea)

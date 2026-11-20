@@ -7,6 +7,7 @@ import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
 import ReportsPage from "./pages/ReportsPage";
+import InsightsPage from "./pages/InsightsPage";
 import DirectorateRequests from "./pages/DirectorateRequests";
 import SchoolsPage from "./pages/SchoolsPage";
 import StaffPage from "./pages/StaffPage";
@@ -54,6 +55,7 @@ function App() {
             <Route path="settings" element={<RequireAuth roles={roles("/settings")}><SettingsPage /></RequireAuth>} />
             <Route path="grades" element={<RequireAuth roles={roles("/grades")}><GradesPage /></RequireAuth>} />
             <Route path="users" element={<RequireAuth roles={roles("/users")}><UsersPage /></RequireAuth>} />
+            <Route path="insights" element={<RequireAuth roles={roles("/insights")}><InsightsPage /></RequireAuth>} />
             <Route path="reports" element={<RequireAuth roles={roles("/reports")}><ReportsPage /></RequireAuth>} />
             <Route path="reports/monthly" element={<Navigate to="/reports" replace />} />
             <Route path="messages" element={<RequireAuth roles={roles("/messages")}><MessagesPage /></RequireAuth>} />

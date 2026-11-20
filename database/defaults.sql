@@ -17,6 +17,10 @@ INSERT INTO settings (key, value, description) VALUES
   ('face_match_threshold', '0.42', 'حد التطابق الوحيد (تشابه جيب التمام) لقبول التعرّف على الوجه (FR-ATT-05)'),
   ('request_priority_weights', '{"severity":0.30,"affected":0.20,"waiting":0.20,"fragility":0.15,"repetition":0.15}',
    'أوزان عوامل أولوية الطلب (FR-REQ-16, FR-ALG-02)'),
-  ('request_overdue_days', '7', 'يُعتبر الطلب المفتوح متأخراً بعد هذا العدد من الأيام (FR-REQ-16)')
+  ('request_overdue_days', '7', 'يُعتبر الطلب المفتوح متأخراً بعد هذا العدد من الأيام (FR-REQ-16)'),
+  ('school_performance_weights', '{"attendance":0.35,"quota":0.30,"requests":0.15,"results":0.20}',
+   'أوزان مؤشر أداء المدرسة: الحضور، إنجاز النصاب، سرعة معالجة الطلبات، مستوى المحصّلات'),
+  ('school_need_weights', '{"shortage":0.30,"absence":0.30,"overdue":0.20,"decline":0.20}',
+   'أوزان مؤشر الاحتياج المركّب (FR-ALG-08): نقص الكادر، الغياب، الطلبات المتأخرة، تراجع النتائج')
 ON CONFLICT (key) DO NOTHING;
 COMMIT;

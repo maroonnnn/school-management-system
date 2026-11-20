@@ -135,6 +135,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: "admin",
   },
   {
+    path: "/insights",
+    label: "التحليلات الذكية",
+    icon: "bi-stars",
+    description: "مؤشر أداء المدارس وترتيبها، وتنبيهات الأنماط غير الطبيعية في الحضور — لدعم القرار فقط.",
+    roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "followup",
+  },
+  {
     path: "/reports",
     label: "التقارير",
     icon: "bi-bar-chart-line",

@@ -16,6 +16,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import faceRoutes from "./routes/face.routes.js";
 import notificationsRoutes from "./routes/notifications.routes.js";
+import analyticsRoutes from "./routes/analytics.routes.js";
 import messagesRoutes from "./routes/messages.routes.js";
 
 const app = express();
@@ -52,6 +53,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/face", faceRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/analytics", analyticsRoutes);
 app.use("/api/messages", messagesRoutes);
 
 // Test route

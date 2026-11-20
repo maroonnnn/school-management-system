@@ -3,6 +3,7 @@ import pool from "../config/database.js";
 import { AuthRequest, authenticateToken } from "../middleware/auth.middleware.js";
 import { readableSchoolIds, resolveReadableSchool } from "../services/scope.service.js";
 import { centralReport, periodRange } from "../services/reports.service.js";
+import { attendanceAlerts } from "../services/analytics.service.js";
 import { getQuotaSummary, weekRange } from "../services/schedule.service.js";
 import { HttpError, handle } from "../utils/http.js";
 
@@ -117,6 +118,10 @@ router.get(
         `SELECT COUNT(*) n FROM result_sheets rs JOIN teaching_assignments ta ON ta.id = rs.teaching_assignment_id
           JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
           WHERE c.school_id = $1 AND rs.status = 'SUBMITTED' AND rs.submitted_at > now() - interval '14 days'`, [u.schoolId]);
+    }
+    if (u.role === "DIRECTORATE_ADMIN" || u.role === "SCHOOL_PRINCIPAL" || u.role === "SCHOOL_DEPUTY") {
+      const alerts = await attendanceAlerts(ids ?? []);
+      attention.push({ key: "attendance_alerts", count: alerts.alerts.length });
     }
     if (u.role !== "MINISTRY_ADMIN") {
       await q("on_leave_today",

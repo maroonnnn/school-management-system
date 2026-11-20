@@ -355,7 +355,13 @@ router.delete(
 
 // ---------------------------------------------------------------- FR-SCH-04/05: settings (directorate / ministry)
 const EDITABLE_SETTINGS = ["permanent_quota_rules", "contract_lesson_rate", "lesson_duration_minutes", "late_tolerance_minutes", "period_times",
-  "request_priority_weights", "request_overdue_days", "face_match_threshold"];
+  "request_priority_weights", "request_overdue_days", "face_match_threshold", "school_performance_weights", "school_need_weights"];
+
+const WEIGHT_KEYS: Record<string, string[]> = {
+  request_priority_weights: ["severity", "affected", "waiting", "fragility", "repetition"],
+  school_performance_weights: ["attendance", "quota", "requests", "results"],
+  school_need_weights: ["shortage", "absence", "overdue", "decline"],
+};
 
 router.get(
   "/settings",
@@ -399,8 +405,8 @@ function validateSetting(key: string, value: unknown) {
     if (!(value as { minYears: number }[]).some((r) => r.minYears === 0)) {
       throw new HttpError(400, "يجب وجود قاعدة تبدأ من 0 سنة");
     }
-  } else if (key === "request_priority_weights") {
-    const keys = ["severity", "affected", "waiting", "fragility", "repetition"];
+  } else if (WEIGHT_KEYS[key]) {
+    const keys = WEIGHT_KEYS[key]!;
     const v = value as Record<string, unknown>;
     if (typeof v !== "object" || v === null || !keys.every((k) => typeof v[k] === "number" && (v[k] as number) >= 0 && (v[k] as number) <= 1)) bad();
     if (keys.reduce((s, k) => s + (v[k] as number), 0) <= 0) throw new HttpError(400, "مجموع الأوزان يجب أن يكون أكبر من صفر");
