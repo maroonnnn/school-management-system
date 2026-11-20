@@ -135,11 +135,11 @@ export const NAV_ITEMS: NavItem[] = [
     group: "admin",
   },
   {
-    path: "/reports/monthly",
-    label: "التقرير الشهري",
+    path: "/reports",
+    label: "التقارير",
     icon: "bi-bar-chart-line",
-    description: "عرض ملخص الحضور والتفاصيل الشهرية للمعلم وطباعتها.",
-    roles: ["DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
+    description: "تقرير المعلم الشهري واعتماده، تقرير المدرسة، الطلبات، والتقرير المركزي — Excel وPDF.",
+    roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "TEACHER"],
     group: "followup",
   },
   {

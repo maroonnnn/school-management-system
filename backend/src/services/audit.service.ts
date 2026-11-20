@@ -6,6 +6,7 @@ export type AuditAction =
   | "LOGIN_FAILED"
   | "ACCESS_DENIED"
   | "VIEW_TEACHER_REPORT"
+  | "REPORT_APPROVE"
   | "REQUEST_STATUS_CHANGE"
   | "DATA_CREATE"
   | "DATA_UPDATE"

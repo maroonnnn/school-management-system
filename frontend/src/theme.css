@@ -217,3 +217,17 @@ body { font-family: var(--bs-body-font-family); background: var(--brand-surface)
 .notif-item { display: block; width: 100%; text-align: start; border: 0; background: #fff; padding: .6rem 1rem; border-bottom: 1px solid var(--brand-border); }
 .notif-item:hover { background: var(--brand-green-50); }
 .notif-item.unread { background: var(--brand-gold-50); border-inline-start: 3px solid var(--brand-gold-500); }
+
+/* ===== Reports: print / save as PDF (FR-RPT-07/08) ===== */
+.print-only { display: none; }
+@media print {
+  .print-only { display: block !important; }
+  .print-header { display: flex !important; align-items: center; gap: 12px; border-bottom: 2px solid var(--brand-gold-500, #b9a26a); padding-bottom: 8px; margin-bottom: 12px; }
+  .print-header img { width: 56px; height: 56px; }
+  .print-signatures { display: flex !important; justify-content: space-around; margin-top: 32px; break-inside: avoid; }
+  .print-signatures .sig-line { width: 180px; border-bottom: 1px solid #333; height: 40px; }
+  .report-print-area { box-shadow: none !important; padding: 0 !important; }
+  .report-print-area .table-responsive { max-height: none !important; }
+  .report-print-area .sticky-top { position: static !important; }
+  .badge { border: 1px solid #999; }
+}

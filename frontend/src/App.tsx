@@ -6,7 +6,7 @@ import { NAV_ITEMS } from "./config/navigation";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
-import MonthlyReport from "./pages/MonthlyReport";
+import ReportsPage from "./pages/ReportsPage";
 import DirectorateRequests from "./pages/DirectorateRequests";
 import SchoolsPage from "./pages/SchoolsPage";
 import StaffPage from "./pages/StaffPage";
@@ -54,10 +54,8 @@ function App() {
             <Route path="settings" element={<RequireAuth roles={roles("/settings")}><SettingsPage /></RequireAuth>} />
             <Route path="grades" element={<RequireAuth roles={roles("/grades")}><GradesPage /></RequireAuth>} />
             <Route path="users" element={<RequireAuth roles={roles("/users")}><UsersPage /></RequireAuth>} />
-            <Route
-              path="reports/monthly"
-              element={<RequireAuth roles={roles("/reports/monthly")}><MonthlyReport /></RequireAuth>}
-            />
+            <Route path="reports" element={<RequireAuth roles={roles("/reports")}><ReportsPage /></RequireAuth>} />
+            <Route path="reports/monthly" element={<Navigate to="/reports" replace />} />
             <Route path="messages" element={<RequireAuth roles={roles("/messages")}><MessagesPage /></RequireAuth>} />
             <Route path="requests" element={<RequireAuth roles={roles("/requests")}><SchoolRequestsPage /></RequireAuth>} />
             <Route
