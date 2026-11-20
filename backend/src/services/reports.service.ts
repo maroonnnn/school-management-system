@@ -29,6 +29,12 @@ export function monthRange(month: string) {
   return { from, to, monthEnd, complete: monthEnd < today };
 }
 
+/** Term 1 = Sep..Jan, term 2 = Feb..Aug (same rule as the results page). */
+export function termOf(date: string): number {
+  const m = Number(date.slice(5, 7));
+  return m >= 9 || m === 1 ? 1 : 2;
+}
+
 export function periodRange(fromQ: unknown, toQ: unknown) {
   const re = /^\d{4}-\d{2}-\d{2}$/;
   if (typeof fromQ !== "string" || typeof toQ !== "string" || !re.test(fromQ) || !re.test(toQ) || fromQ > toQ) {
@@ -330,7 +336,7 @@ interface CentralRow {
   schoolId: number; schoolName: string; stage: number; directorateId: number; directorateName: string;
   students: number; teachers: number; staff: number; attendanceRate: number | null; possibleAbsenceDays: number; lateDays: number;
   quotaCompletion: number | null; requestsOpen: number; requestsOverdue: number; avgDaysToDecision: number | null;
-  outages: number; resultsAverage: number | null; _dc: DayCounts; _due: number; _executed: number;
+  outages: number; resultsAverage: number | null; resultsSubmitted: number; resultsDue: number; staffShortage: number; _dc: DayCounts; _due: number; _executed: number;
 }
 
 // ---------------------------------------------------------------- FR-RPT-06: central aggregated report (no individuals)
@@ -346,11 +352,18 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
               AND (po.starts_at AT TIME ZONE 'Asia/Damascus')::date BETWEEN $2 AND $3)::int AS outages,
             (SELECT ROUND(AVG(tr.score), 1) FROM term_results tr JOIN result_sheets rs ON rs.id = tr.sheet_id AND rs.status = 'SUBMITTED'
                JOIN teaching_assignments ta ON ta.id = rs.teaching_assignment_id JOIN sections sc ON sc.id = ta.section_id
-               JOIN classes c ON c.id = sc.class_id WHERE c.school_id = s.id)::float AS results_average
+               JOIN classes c ON c.id = sc.class_id WHERE c.school_id = s.id)::float AS results_average,
+            (SELECT COUNT(*) FROM teaching_assignments ta JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
+              WHERE c.school_id = s.id AND ta.is_active)::int AS result_sheets_due,
+            (SELECT COUNT(*) FROM result_sheets rs JOIN teaching_assignments ta ON ta.id = rs.teaching_assignment_id
+               JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
+              WHERE c.school_id = s.id AND ta.is_active AND rs.status = 'SUBMITTED' AND rs.term = $4)::int AS result_sheets_submitted,
+            (SELECT COUNT(*) FROM school_requests sr WHERE sr.school_id = s.id AND sr.request_type = 'TEACHERS'
+              AND sr.status IN ('SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'IN_PROGRESS'))::int AS staff_shortage
        FROM schools s JOIN directorates d ON d.id = s.directorate_id
       WHERE ($1::bigint[] IS NULL OR s.id = ANY($1))
       ORDER BY d.name, s.name`,
-    [schoolIds, from, to]
+    [schoolIds, from, to, termOf(to)]
   );
   const req = await requestsReport(schoolIds, from, to);
   const reqBy = new Map(req.schools.map((x) => [x.schoolId, x]));
@@ -358,9 +371,18 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
   const quota = await getQuotaSummary(from, to, {});
 
   const rows: CentralRow[] = [];
+  const daily = new Map<string, { duty: number; attended: number }>();
   for (const s of schools.rows) {
     const days = await classifyRange(from, to, { schoolId: Number(s.id) });
     const dc = countDays(days);
+    for (const d of days) {
+      const b = dayBucket(d);
+      if (!b || b === "excused" || b === "outage") continue;
+      const t = daily.get(d.date) ?? { duty: 0, attended: 0 };
+      t.duty++;
+      if (b !== "possibleAbsence" && b !== "absent") t.attended++;
+      daily.set(d.date, t);
+    }
     const qs = quota.filter((q) => Number(q.school_id) === Number(s.id)).map((q) => quotaFigures(q, pf.factor)!);
     const due = qs.reduce((t, q) => t + Math.max(q.required - q.excused, 0), 0);
     const executed = qs.reduce((t, q) => t + q.executed, 0);
@@ -372,6 +394,7 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
       quotaCompletion: due ? round1(Math.min(executed / due, 1) * 100) : null,
       requestsOpen: rq?.open ?? 0, requestsOverdue: rq?.overdue ?? 0, avgDaysToDecision: rq?.avgDaysToDecision ?? null,
       outages: s.outages, resultsAverage: s.results_average,
+      resultsSubmitted: s.result_sheets_submitted, resultsDue: s.result_sheets_due, staffShortage: s.staff_shortage,
       _dc: dc, _due: due, _executed: executed,
     });
   }
@@ -389,6 +412,9 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
       requestsOpen: list.reduce((t, r) => t + r.requestsOpen, 0),
       requestsOverdue: list.reduce((t, r) => t + r.requestsOverdue, 0),
       outages: list.reduce((t, r) => t + r.outages, 0),
+      staffShortage: list.reduce((t, r) => t + r.staffShortage, 0),
+      resultsSubmitted: list.reduce((t, r) => t + r.resultsSubmitted, 0),
+      resultsDue: list.reduce((t, r) => t + r.resultsDue, 0),
     };
   };
   const dirs = new Map<number, typeof rows>();
@@ -399,7 +425,12 @@ export async function centralReport(schoolIds: number[] | null, from: string, to
   const clean = rows.map(({ _dc, _due, _executed, ...r }) => r);
   return {
     period: { from, to },
+    term: termOf(to),
     totals: group(rows),
+    daily: [...daily.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, t]) => ({ date, rate: t.duty ? round1((t.attended / t.duty) * 100) : null, duty: t.duty })),
+    requestsByType: req.byType,
+    requestsAvgDaysToDecision: req.totals.avgDaysToDecision,
     directorates: [...dirs.values()].map((list) => ({ directorateId: list[0]!.directorateId, directorateName: list[0]!.directorateName, ...group(list) })),
     schools: clean,
   };

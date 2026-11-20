@@ -1,9 +1,10 @@
 import { Router } from "express";
 import pool from "../config/database.js";
 import { AuthRequest, authenticateToken } from "../middleware/auth.middleware.js";
-import { readableSchoolIds } from "../services/scope.service.js";
+import { readableSchoolIds, resolveReadableSchool } from "../services/scope.service.js";
+import { centralReport, periodRange } from "../services/reports.service.js";
 import { getQuotaSummary, weekRange } from "../services/schedule.service.js";
-import { handle } from "../utils/http.js";
+import { HttpError, handle } from "../utils/http.js";
 
 // Home-page indicators, scoped to the user's role (early version of FR-DASH-01/02; aggregated numbers only).
 /** Term 1 = Sep..Jan, term 2 = Feb..Aug. */
@@ -135,6 +136,41 @@ router.get(
         attention,
       },
     });
+  })
+);
+
+// FR-DASH-01..06: indicators for a period (+ optional school), built with the same centralReport() as the exported
+// central report, so the dashboard and the Excel for the same period show the same figures (FR-DASH-04).
+router.get(
+  "/indicators",
+  handle<AuthRequest>(async (req, res) => {
+    const u = req.user!;
+    if (u.role === "TEACHER") throw new HttpError(403, "اللوحة المجمّعة غير متاحة للمعلم");
+    const { from, to } = periodRange(req.query.from, req.query.to);
+    const ids = req.query.schoolId ? [await resolveReadableSchool(u, req.query.schoolId)] : await readableSchoolIds(u);
+    const report = await centralReport(ids, from, to);
+
+    // FR-DASH-05: delivery of decisions sent by this ministry / directorate in the period
+    let decisions = null;
+    if (u.role === "MINISTRY_ADMIN" || u.role === "DIRECTORATE_ADMIN") {
+      const sender = u.role === "MINISTRY_ADMIN" ? ["MINISTRY", null] : ["DIRECTORATE", u.directorateId];
+      const lateDays = 3;
+      const r = await pool.query(
+        `SELECT m.id, m.kind, m.subject, m.requires_ack, to_char(m.sent_at AT TIME ZONE 'Asia/Damascus', 'YYYY-MM-DD') AS sent_date,
+                COUNT(mr.*)::int AS recipients,
+                COUNT(mr.opened_at)::int AS opened,
+                COUNT(mr.acknowledged_at)::int AS acknowledged,
+                COUNT(*) FILTER (WHERE mr.opened_at IS NULL AND m.sent_at < now() - make_interval(days => $4))::int AS late_unopened,
+                COUNT(*) FILTER (WHERE m.requires_ack AND mr.acknowledged_at IS NULL AND m.sent_at < now() - make_interval(days => $4))::int AS late_unacknowledged
+           FROM messages m JOIN message_recipients mr ON mr.message_id = m.id
+          WHERE m.status = 'SENT' AND m.sender_type = $1 AND ($2::bigint IS NULL OR m.sender_ref_id = $2)
+            AND (m.sent_at AT TIME ZONE 'Asia/Damascus')::date BETWEEN $3 AND $5
+          GROUP BY m.id ORDER BY m.sent_at DESC`,
+        [sender[0], sender[1], from, lateDays, to]
+      );
+      decisions = { lateDays, messages: r.rows };
+    }
+    res.json({ success: true, data: { ...report, decisions } });
   })
 );
 
