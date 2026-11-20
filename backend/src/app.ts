@@ -23,10 +23,14 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
-// Allow frontend communication
+// Behind a reverse proxy (nginx in Docker) — use X-Forwarded-For for req.ip in the audit log
+if (process.env.TRUST_PROXY === "1") app.set("trust proxy", 1);
+
+// Allow frontend communication. In Docker the frontend is served from the same origin via nginx,
+// so CORS only matters for local development (Vite on 5173). Comma-separated list.
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: (process.env.CORS_ORIGIN ?? "http://localhost:5173").split(",").map((o) => o.trim()),
   })
 );
 
