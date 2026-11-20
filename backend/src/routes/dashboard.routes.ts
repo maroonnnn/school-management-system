@@ -98,7 +98,7 @@ router.get(
       const r = await pool.query(sql, p);
       attention.push({ key, count: Number(r.rows[0].n) });
     };
-    if (u.role === "DIRECTORATE_ADMIN" || u.role === "MINISTRY_ADMIN") {
+    if (u.role === "DIRECTORATE_ADMIN") { // the ministry has no review queue → no "needs attention" card
       await q("requests_pending",
         `SELECT COUNT(*) n FROM school_requests sr JOIN schools s ON s.id = sr.school_id
           WHERE ${scope} AND sr.status IN ('SUBMITTED', 'UNDER_REVIEW')`, params);
