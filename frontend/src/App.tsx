@@ -22,6 +22,7 @@ import MyAttendancePage from "./pages/MyAttendancePage";
 import FaceEnrollPage from "./pages/FaceEnrollPage";
 import KioskPage from "./pages/KioskPage";
 import SchoolRequestsPage from "./pages/SchoolRequestsPage";
+import MessagesPage from "./pages/MessagesPage";
 
 const roles = (path: string) => NAV_ITEMS.find((i) => i.path === path)?.roles ?? "ALL";
 
@@ -57,6 +58,7 @@ function App() {
               path="reports/monthly"
               element={<RequireAuth roles={roles("/reports/monthly")}><MonthlyReport /></RequireAuth>}
             />
+            <Route path="messages" element={<RequireAuth roles={roles("/messages")}><MessagesPage /></RequireAuth>} />
             <Route path="requests" element={<RequireAuth roles={roles("/requests")}><SchoolRequestsPage /></RequireAuth>} />
             <Route
               path="requests/review"

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wY8ls3DVc8zjHQYrZY1KHA8iOuaHZBZB5YsiGlSG5mDFx0k3DlrWhLZjvwyQ85K
+\restrict iMvg4h6VkynnkYAI7INhOaulV9P4DWToWRnbfYPmO7Zno40qXy2F0ipXaZxWs4J
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -25,12 +25,12 @@ SET row_security = off;
 
 CREATE FUNCTION public.permanent_quota(p_years integer) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT (r->>'quota')::int
-      FROM settings, jsonb_array_elements(value) r
-     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
-     ORDER BY (r->>'minYears')::int DESC
-     LIMIT 1
+    AS $$
+    SELECT (r->>'quota')::int
+      FROM settings, jsonb_array_elements(value) r
+     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
+     ORDER BY (r->>'minYears')::int DESC
+     LIMIT 1
 $$;
 
 
@@ -40,16 +40,16 @@ $$;
 
 CREATE FUNCTION public.prevent_approved_grade_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_status varchar(20);
-BEGIN
-    SELECT status INTO v_status FROM assessments
-     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
-    IF v_status = 'APPROVED' THEN
-        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
+    AS $$
+DECLARE v_status varchar(20);
+BEGIN
+    SELECT status INTO v_status FROM assessments
+     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
+    IF v_status = 'APPROVED' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
 $$;
 
 
@@ -59,10 +59,10 @@ $$;
 
 CREATE FUNCTION public.prevent_attendance_event_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'أحداث الحضور الخام لا تقبل التعديل أو الحذف — استخدم التصحيحات';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'أحداث الحضور الخام لا تقبل التعديل أو الحذف — استخدم التصحيحات';
+END;
 $$;
 
 
@@ -72,10 +72,52 @@ $$;
 
 CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
+$$;
+
+
+--
+-- Name: protect_sent_message(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_sent_message() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF TG_OP = 'DELETE' AND OLD.status = 'SENT' THEN
+        RAISE EXCEPTION 'لا يمكن حذف رسالة بعد إرسالها';
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.status = 'SENT' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+--
+-- Name: protect_sent_message_children(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_sent_message_children() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE v_status varchar(10);
+BEGIN
+    SELECT status INTO v_status FROM messages WHERE id = COALESCE(NEW.message_id, OLD.message_id);
+    IF v_status = 'SENT' THEN
+        IF TG_TABLE_NAME = 'message_recipients' AND TG_OP = 'UPDATE'
+           AND NEW.message_id = OLD.message_id AND NEW.recipient_type = OLD.recipient_type
+           AND NEW.recipient_ref_id = OLD.recipient_ref_id THEN
+            RETURN NEW; -- read / acknowledge tracking is allowed
+        END IF;
+        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
 $$;
 
 
@@ -85,10 +127,10 @@ $$;
 
 CREATE FUNCTION public.stage_allows_grade(p_stage smallint, p_grade integer) RETURNS boolean
     LANGUAGE sql IMMUTABLE
-    AS $$
-    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
-                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
-                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
+    AS $$
+    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
+                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
+                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
 $$;
 
 
@@ -98,19 +140,19 @@ $$;
 
 CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_window int;
-BEGIN
-    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
-    SELECT (value #>> '{}')::int INTO v_window FROM settings WHERE key = 'duplicate_event_window_minutes';
-    IF EXISTS (SELECT 1 FROM attendance_events
-                WHERE employee_assignment_id = NEW.employee_assignment_id
-                  AND event_type = NEW.event_type
-                  AND abs(extract(epoch FROM event_time - NEW.event_time)) < COALESCE(v_window, 2) * 60) THEN
-        RETURN NULL; -- duplicate: ignore
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_window int;
+BEGIN
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+    SELECT (value #>> '{}')::int INTO v_window FROM settings WHERE key = 'duplicate_event_window_minutes';
+    IF EXISTS (SELECT 1 FROM attendance_events
+                WHERE employee_assignment_id = NEW.employee_assignment_id
+                  AND event_type = NEW.event_type
+                  AND abs(extract(epoch FROM event_time - NEW.event_time)) < COALESCE(v_window, 2) * 60) THEN
+        RETURN NULL; -- duplicate: ignore
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -120,15 +162,15 @@ $$;
 
 CREATE FUNCTION public.validate_class_grade_stage() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
-    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
-        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
+    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
+        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -138,23 +180,23 @@ $$;
 
 CREATE FUNCTION public.validate_contract_hours() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
-BEGIN
-    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
-    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
-      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
-    IF v_type = 'CONTRACT' THEN
-        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
-          FROM employee_assignments
-         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
-        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
-            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
-                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
-        END IF;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
+BEGIN
+    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
+    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
+      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
+    IF v_type = 'CONTRACT' THEN
+        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
+          FROM employee_assignments
+         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
+        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
+            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
+                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -164,15 +206,15 @@ $$;
 
 CREATE FUNCTION public.validate_period_duration() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_minutes int;
-BEGIN
-    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
-    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
-        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_minutes int;
+BEGIN
+    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
+    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
+        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -182,14 +224,14 @@ $$;
 
 CREATE FUNCTION public.validate_school_stage_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
-                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
-        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
+                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
+        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -199,17 +241,17 @@ $$;
 
 CREATE FUNCTION public.validate_section_track() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
-    IF v_stage = 3 AND NEW.track IS NULL THEN
-        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
-    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
-        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
+    IF v_stage = 3 AND NEW.track IS NULL THEN
+        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
+    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
+        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -219,26 +261,26 @@ $$;
 
 CREATE FUNCTION public.validate_teacher_slot() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_emp bigint; v_clash text;
-BEGIN
-    SELECT ea.employee_id INTO v_emp
-      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-     WHERE ta.id = NEW.teaching_assignment_id;
-    SELECT c.name || ' / ' || sc.name INTO v_clash
-      FROM timetable_periods tp
-      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
-      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
-      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
-     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
-       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
-     LIMIT 1;
-    IF v_clash IS NOT NULL THEN
-        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_emp bigint; v_clash text;
+BEGIN
+    SELECT ea.employee_id INTO v_emp
+      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+     WHERE ta.id = NEW.teaching_assignment_id;
+    SELECT c.name || ' / ' || sc.name INTO v_clash
+      FROM timetable_periods tp
+      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
+      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
+      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
+     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
+       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
+     LIMIT 1;
+    IF v_clash IS NOT NULL THEN
+        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -248,10 +290,10 @@ $$;
 
 CREATE FUNCTION public.years_of_service(p_employee_id bigint, p_on date DEFAULT CURRENT_DATE) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
-      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
-     WHERE e.id = p_employee_id
+    AS $$
+    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
+      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
+     WHERE e.id = p_employee_id
 $$;
 
 
@@ -672,6 +714,92 @@ ALTER TABLE public.lesson_executions ALTER COLUMN id ADD GENERATED ALWAYS AS IDE
 
 
 --
+-- Name: message_attachments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.message_attachments (
+    id bigint NOT NULL,
+    message_id bigint NOT NULL,
+    file_name character varying(255) NOT NULL,
+    file_path text NOT NULL,
+    file_type character varying(100) NOT NULL,
+    file_size bigint NOT NULL,
+    uploaded_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT message_attachments_file_size_check CHECK ((file_size > 0))
+);
+
+
+--
+-- Name: message_attachments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.message_attachments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.message_attachments_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: message_recipients; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.message_recipients (
+    message_id bigint NOT NULL,
+    recipient_type character varying(20) NOT NULL,
+    recipient_ref_id bigint NOT NULL,
+    opened_at timestamp with time zone,
+    opened_by bigint,
+    acknowledged_at timestamp with time zone,
+    acknowledged_by bigint,
+    CONSTRAINT chk_recipient_type CHECK (((recipient_type)::text = ANY ((ARRAY['DIRECTORATE'::character varying, 'SCHOOL'::character varying])::text[])))
+);
+
+
+--
+-- Name: messages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.messages (
+    id bigint NOT NULL,
+    kind character varying(20) NOT NULL,
+    sender_type character varying(20) NOT NULL,
+    sender_ref_id bigint NOT NULL,
+    sender_user_id bigint NOT NULL,
+    subject character varying(200) NOT NULL,
+    body text NOT NULL,
+    requires_ack boolean DEFAULT false NOT NULL,
+    reply_to_id bigint,
+    status character varying(10) DEFAULT 'DRAFT'::character varying NOT NULL,
+    target_summary character varying(200),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    CONSTRAINT chk_message_kind CHECK (((kind)::text = ANY ((ARRAY['CIRCULAR'::character varying, 'NOTICE'::character varying, 'MESSAGE'::character varying])::text[]))),
+    CONSTRAINT chk_message_sender CHECK (((sender_type)::text = ANY ((ARRAY['MINISTRY'::character varying, 'DIRECTORATE'::character varying, 'SCHOOL'::character varying])::text[]))),
+    CONSTRAINT chk_message_sent_at CHECK ((((status)::text = 'SENT'::text) = (sent_at IS NOT NULL))),
+    CONSTRAINT chk_message_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SENT'::character varying])::text[]))),
+    CONSTRAINT chk_message_text CHECK (((length(TRIM(BOTH FROM subject)) > 0) AND (length(TRIM(BOTH FROM body)) > 0)))
+);
+
+
+--
+-- Name: messages_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.messages ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.messages_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: ministries; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -721,6 +849,7 @@ CREATE TABLE public.notifications (
     link character varying(200),
     request_id bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    message_id bigint,
     CONSTRAINT chk_notification_target CHECK (((school_id IS NOT NULL) OR (directorate_id IS NOT NULL)))
 );
 
@@ -842,8 +971,8 @@ CREATE TABLE public.request_status_history (
     changed_by bigint NOT NULL,
     notes text,
     changed_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT chk_history_new_status CHECK (((new_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))),
-    CONSTRAINT chk_history_old_status CHECK (((old_status IS NULL) OR ((old_status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))))
+    CONSTRAINT chk_history_new_status CHECK (((new_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('RETURNED'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text, ('CLOSED'::character varying)::text]))),
+    CONSTRAINT chk_history_old_status CHECK (((old_status IS NULL) OR ((old_status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('RETURNED'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text, ('CLOSED'::character varying)::text]))))
 );
 
 
@@ -946,8 +1075,8 @@ CREATE TABLE public.school_requests (
     CONSTRAINT chk_priority_score CHECK (((priority_score IS NULL) OR ((priority_score >= (0)::numeric) AND (priority_score <= (100)::numeric)))),
     CONSTRAINT chk_request_affected CHECK ((affected_students >= 0)),
     CONSTRAINT chk_request_severity CHECK (((severity >= 1) AND (severity <= 5))),
-    CONSTRAINT chk_school_request_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying, 'UNDER_REVIEW'::character varying, 'RETURNED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CLOSED'::character varying])::text[]))),
-    CONSTRAINT chk_school_request_type CHECK (((request_type)::text = ANY ((ARRAY['MAINTENANCE'::character varying, 'TEACHERS'::character varying, 'TEXTBOOKS'::character varying, 'FURNITURE'::character varying, 'COMPUTERS'::character varying, 'OTHER'::character varying, 'TEACHER_ACCOUNT'::character varying])::text[])))
+    CONSTRAINT chk_school_request_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('UNDER_REVIEW'::character varying)::text, ('RETURNED'::character varying)::text, ('APPROVED'::character varying)::text, ('REJECTED'::character varying)::text, ('IN_PROGRESS'::character varying)::text, ('COMPLETED'::character varying)::text, ('CLOSED'::character varying)::text]))),
+    CONSTRAINT chk_school_request_type CHECK (((request_type)::text = ANY (ARRAY[('MAINTENANCE'::character varying)::text, ('TEACHERS'::character varying)::text, ('TEXTBOOKS'::character varying)::text, ('FURNITURE'::character varying)::text, ('COMPUTERS'::character varying)::text, ('OTHER'::character varying)::text, ('TEACHER_ACCOUNT'::character varying)::text])))
 );
 
 
@@ -1429,6 +1558,30 @@ ALTER TABLE ONLY public.lesson_executions
 
 
 --
+-- Name: message_attachments message_attachments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_attachments
+    ADD CONSTRAINT message_attachments_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_recipients message_recipients_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_recipients
+    ADD CONSTRAINT message_recipients_pkey PRIMARY KEY (message_id, recipient_type, recipient_ref_id);
+
+
+--
+-- Name: messages messages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: ministries ministries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1859,6 +2012,20 @@ CREATE INDEX idx_leaves_employee_dates ON public.employee_leaves USING btree (em
 
 
 --
+-- Name: idx_message_recipients_box; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_recipients_box ON public.message_recipients USING btree (recipient_type, recipient_ref_id);
+
+
+--
+-- Name: idx_messages_sender; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_messages_sender ON public.messages USING btree (sender_type, sender_ref_id, created_at DESC);
+
+
+--
 -- Name: idx_notifications_directorate; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1996,6 +2163,27 @@ CREATE TRIGGER trg_grades_frozen_after_approval BEFORE INSERT OR DELETE OR UPDAT
 --
 
 CREATE TRIGGER trg_period_duration BEFORE INSERT OR UPDATE OF start_time, end_time ON public.timetable_periods FOR EACH ROW EXECUTE FUNCTION public.validate_period_duration();
+
+
+--
+-- Name: message_attachments trg_protect_msg_attachments; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_protect_msg_attachments BEFORE INSERT OR DELETE OR UPDATE ON public.message_attachments FOR EACH ROW EXECUTE FUNCTION public.protect_sent_message_children();
+
+
+--
+-- Name: message_recipients trg_protect_recipients; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_protect_recipients BEFORE INSERT OR DELETE OR UPDATE ON public.message_recipients FOR EACH ROW EXECUTE FUNCTION public.protect_sent_message_children();
+
+
+--
+-- Name: messages trg_protect_sent_message; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_protect_sent_message BEFORE DELETE OR UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.protect_sent_message();
 
 
 --
@@ -2323,6 +2511,54 @@ ALTER TABLE ONLY public.lesson_executions
 
 
 --
+-- Name: message_attachments message_attachments_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_attachments
+    ADD CONSTRAINT message_attachments_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: message_recipients message_recipients_acknowledged_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_recipients
+    ADD CONSTRAINT message_recipients_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.users(id);
+
+
+--
+-- Name: message_recipients message_recipients_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_recipients
+    ADD CONSTRAINT message_recipients_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE CASCADE;
+
+
+--
+-- Name: message_recipients message_recipients_opened_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.message_recipients
+    ADD CONSTRAINT message_recipients_opened_by_fkey FOREIGN KEY (opened_by) REFERENCES public.users(id);
+
+
+--
+-- Name: messages messages_reply_to_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_reply_to_id_fkey FOREIGN KEY (reply_to_id) REFERENCES public.messages(id);
+
+
+--
+-- Name: messages messages_sender_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_sender_user_id_fkey FOREIGN KEY (sender_user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: notification_reads notification_reads_notification_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2344,6 +2580,14 @@ ALTER TABLE ONLY public.notification_reads
 
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_directorate_id_fkey FOREIGN KEY (directorate_id) REFERENCES public.directorates(id);
+
+
+--
+-- Name: notifications notifications_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.messages(id) ON DELETE CASCADE;
 
 
 --
@@ -2526,5 +2770,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wY8ls3DVc8zjHQYrZY1KHA8iOuaHZBZB5YsiGlSG5mDFx0k3DlrWhLZjvwyQ85K
+\unrestrict iMvg4h6VkynnkYAI7INhOaulV9P4DWToWRnbfYPmO7Zno40qXy2F0ipXaZxWs4J
 

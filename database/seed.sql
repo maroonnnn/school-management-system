@@ -6999,6 +6999,60 @@ UPDATE assessments SET status='APPROVED', submitted_at='2026-10-22 10:00+03', ap
 
 UPDATE assessments SET status='APPROVED', submitted_at='2026-10-22 10:00+03', approved_by=82, approved_at='2026-10-23 09:00+03' WHERE id=9;
 
+INSERT INTO messages (id, kind, sender_type, sender_ref_id, sender_user_id, subject, body, requires_ack, target_summary, status, sent_at, created_at) OVERRIDING SYSTEM VALUE VALUES
+(1, 'CIRCULAR', 'MINISTRY', 1, 1, 'تعميم بشأن مواعيد امتحانات الفصل الأول', 'تُجرى امتحانات الفصل الأول اعتباراً من 2026-12-20 وفق البرنامج المرفق. يُرجى إبلاغ الكادر والطلاب وتأكيد الاستلام.', TRUE, 'كل المدارس', 'DRAFT', NULL, '2026-10-29 09:00:00+03'),
+(2, 'CIRCULAR', 'MINISTRY', 1, 1, 'تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', 'يُطلب من مدراء المدارس استكمال تسجيل وجوه الكادر التدريسي والإداري قبل نهاية الشهر الجاري.', FALSE, 'كل المدارس', 'DRAFT', NULL, '2026-11-05 09:00:00+03'),
+(3, 'NOTICE', 'DIRECTORATE', 1, 2, 'اجتماع مدراء المدارس', 'يُعقد اجتماع مدراء المدارس يوم الخميس القادم الساعة العاشرة صباحاً في مبنى المديرية.', TRUE, 'كل مدارس المديرية', 'DRAFT', NULL, '2026-11-03 09:00:00+03'),
+(4, 'MESSAGE', 'SCHOOL', 1, 16, 'طلب تزويد المدرسة بكتب إضافية', 'نرجو تزويدنا بنسخ إضافية من كتاب العلوم للصف السابع بسبب زيادة عدد الطلاب.', FALSE, 'المديرية', 'DRAFT', NULL, '2026-11-08 09:00:00+03');
+
+INSERT INTO message_recipients (message_id, recipient_type, recipient_ref_id, opened_at, opened_by, acknowledged_at, acknowledged_by) VALUES
+(1, 'SCHOOL', 1, '2026-10-29 11:00:00+03', 16, NULL, NULL),
+(1, 'SCHOOL', 2, NULL, NULL, NULL, NULL),
+(1, 'SCHOOL', 3, '2026-10-29 11:02:00+03', 49, '2026-10-29 12:02:00+03', 49),
+(1, 'SCHOOL', 4, NULL, NULL, NULL, NULL),
+(1, 'SCHOOL', 5, '2026-10-29 11:04:00+03', 82, '2026-10-29 12:04:00+03', 82),
+(1, 'DIRECTORATE', 1, '2026-10-29 11:05:00+03', 2, '2026-10-29 12:05:00+03', 2),
+(2, 'SCHOOL', 1, '2026-11-05 11:00:00+03', 16, NULL, NULL),
+(2, 'SCHOOL', 2, '2026-11-05 11:01:00+03', 32, NULL, NULL),
+(2, 'SCHOOL', 3, NULL, NULL, NULL, NULL),
+(2, 'SCHOOL', 4, '2026-11-05 11:03:00+03', 65, NULL, NULL),
+(2, 'SCHOOL', 5, '2026-11-05 11:04:00+03', 82, NULL, NULL),
+(2, 'DIRECTORATE', 1, '2026-11-05 11:05:00+03', 2, NULL, NULL),
+(3, 'SCHOOL', 1, NULL, NULL, NULL, NULL),
+(3, 'SCHOOL', 2, NULL, NULL, NULL, NULL),
+(3, 'SCHOOL', 3, NULL, NULL, NULL, NULL),
+(3, 'SCHOOL', 4, NULL, NULL, NULL, NULL),
+(3, 'SCHOOL', 5, '2026-11-03 11:04:00+03', 82, '2026-11-03 12:04:00+03', 82),
+(4, 'DIRECTORATE', 1, '2026-11-08 11:00:00+03', 2, NULL, NULL);
+
+UPDATE messages SET status = 'SENT', sent_at = '2026-10-29 09:15:00+03' WHERE id = 1;
+
+UPDATE messages SET status = 'SENT', sent_at = '2026-11-05 09:15:00+03' WHERE id = 2;
+
+UPDATE messages SET status = 'SENT', sent_at = '2026-11-03 09:15:00+03' WHERE id = 3;
+
+UPDATE messages SET status = 'SENT', sent_at = '2026-11-08 09:15:00+03' WHERE id = 4;
+
+INSERT INTO notifications (school_id, directorate_id, title, link, message_id, created_at) VALUES
+(1, NULL, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(2, NULL, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(3, NULL, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(4, NULL, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(5, NULL, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(NULL, 1, 'تعميم من الوزارة: تعميم بشأن مواعيد امتحانات الفصل الأول', '/messages?box=inbox&open=1', 1, '2026-10-29 09:15:00+03'),
+(1, NULL, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(2, NULL, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(3, NULL, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(4, NULL, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(5, NULL, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(NULL, 1, 'تعميم من الوزارة: تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه', '/messages?box=inbox&open=2', 2, '2026-11-05 09:15:00+03'),
+(1, NULL, 'إشعار من المديرية: اجتماع مدراء المدارس', '/messages?box=inbox&open=3', 3, '2026-11-03 09:15:00+03'),
+(2, NULL, 'إشعار من المديرية: اجتماع مدراء المدارس', '/messages?box=inbox&open=3', 3, '2026-11-03 09:15:00+03'),
+(3, NULL, 'إشعار من المديرية: اجتماع مدراء المدارس', '/messages?box=inbox&open=3', 3, '2026-11-03 09:15:00+03'),
+(4, NULL, 'إشعار من المديرية: اجتماع مدراء المدارس', '/messages?box=inbox&open=3', 3, '2026-11-03 09:15:00+03'),
+(5, NULL, 'إشعار من المديرية: اجتماع مدراء المدارس', '/messages?box=inbox&open=3', 3, '2026-11-03 09:15:00+03'),
+(NULL, 1, 'رسالة من مدرسة: طلب تزويد المدرسة بكتب إضافية', '/messages?box=inbox&open=4', 4, '2026-11-08 09:15:00+03');
+
 -- sync sequences with explicit ids
 DO $$
 DECLARE r record;

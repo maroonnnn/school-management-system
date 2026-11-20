@@ -427,6 +427,47 @@ insert("assessments", ["id", "teaching_assignment_id", "title", "assessment_type
 insert("grades", ["assessment_id", "enrollment_id", "score", "recorded_by"], grade_rows)
 sql.extend(approve_sql)
 
+# ---------------- messages & circulars (FR-MSG) ----------------
+ministry_user = 1
+msg_rows, rcpt_rows, msg_notif = [], [], []
+def ts(d, h, m=0):
+    return f"{d} {h:02d}:{m:02d}:00+03"
+MSGS = [
+    # (kind, sender_type, sender_ref, sender_user, subject, body, requires_ack, target_summary, sent day offset, recipients)
+    ("CIRCULAR", "MINISTRY", 1, ministry_user, "تعميم بشأن مواعيد امتحانات الفصل الأول",
+     "تُجرى امتحانات الفصل الأول اعتباراً من 2026-12-20 وفق البرنامج المرفق. يُرجى إبلاغ الكادر والطلاب وتأكيد الاستلام.",
+     True, "كل المدارس", 9, [("SCHOOL", s[0]) for s in SCHOOLS] + [("DIRECTORATE", 1)]),
+    ("CIRCULAR", "MINISTRY", 1, ministry_user, "تعميم بشأن تفعيل نظام الحضور بالتعرف على الوجه",
+     "يُطلب من مدراء المدارس استكمال تسجيل وجوه الكادر التدريسي والإداري قبل نهاية الشهر الجاري.",
+     False, "كل المدارس", 4, [("SCHOOL", s[0]) for s in SCHOOLS] + [("DIRECTORATE", 1)]),
+    ("NOTICE", "DIRECTORATE", 1, dir_user, "اجتماع مدراء المدارس",
+     "يُعقد اجتماع مدراء المدارس يوم الخميس القادم الساعة العاشرة صباحاً في مبنى المديرية.",
+     True, "كل مدارس المديرية", 6, [("SCHOOL", s[0]) for s in SCHOOLS]),
+    ("MESSAGE", "SCHOOL", 1, school_users[1][0], "طلب تزويد المدرسة بكتب إضافية",
+     "نرجو تزويدنا بنسخ إضافية من كتاب العلوم للصف السابع بسبب زيادة عدد الطلاب.",
+     False, "المديرية", 3, [("DIRECTORATE", 1)]),
+]
+for i, (kind, stype, sref, suser, subj, body, ack, summary, ago, rcpts) in enumerate(MSGS, start=1):
+    sent_day = work_dates[min(ago, len(work_dates) - 1)]
+    msg_rows.append((i, kind, stype, sref, suser, subj, body, ack, summary, "SENT", ts(sent_day, 9, 15), ts(sent_day, 9, 0)))
+    for k, (rtype, rid) in enumerate(rcpts):
+        opened = random.random() < 0.7
+        acked = ack and opened and random.random() < 0.7
+        opener = (school_users[rid][0] if rtype == "SCHOOL" else dir_user) if opened else None
+        rcpt_rows.append((i, rtype, rid, ts(sent_day, 11, k) if opened else None, opener,
+                          ts(sent_day, 12, k) if acked else None, opener if acked else None))
+        msg_notif.append((rid if rtype == "SCHOOL" else None, rid if rtype == "DIRECTORATE" else None,
+                          f"{'تعميم من الوزارة' if kind == 'CIRCULAR' else 'إشعار من المديرية' if kind == 'NOTICE' else 'رسالة من مدرسة'}: {subj}",
+                          f"/messages?box=inbox&open={i}", i, ts(sent_day, 9, 15)))
+# recipient rows must be inserted while the message is still DRAFT (FR-MSG-07 trigger), then the message is sent
+insert("messages", ["id", "kind", "sender_type", "sender_ref_id", "sender_user_id", "subject", "body", "requires_ack", "target_summary",
+                    "status", "sent_at", "created_at"],
+       [r[:9] + ("DRAFT", None, r[11]) for r in msg_rows])
+insert("message_recipients", ["message_id", "recipient_type", "recipient_ref_id", "opened_at", "opened_by", "acknowledged_at", "acknowledged_by"], rcpt_rows)
+for r in msg_rows:
+    sql.append(f"UPDATE messages SET status = 'SENT', sent_at = '{r[10]}' WHERE id = {r[0]};")
+insert("notifications", ["school_id", "directorate_id", "title", "link", "message_id", "created_at"], msg_notif)
+
 # ---------------- write ----------------
 seq_fix = """
 -- sync sequences with explicit ids

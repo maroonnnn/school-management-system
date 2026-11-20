@@ -143,6 +143,14 @@ export const NAV_ITEMS: NavItem[] = [
     group: "followup",
   },
   {
+    path: "/messages",
+    label: "المراسلات والتعاميم",
+    icon: "bi-envelope-paper",
+    description: "تعاميم الوزارة، إشعارات المديرية، ووارد وصادر المدرسة مع حالة الفتح والتأكيد.",
+    roles: ["MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY"],
+    group: "followup",
+  },
+  {
     path: "/requests",
     label: "طلبات المدرسة",
     icon: "bi-send",
