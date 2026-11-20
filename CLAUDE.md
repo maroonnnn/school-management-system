@@ -133,7 +133,7 @@
 - [ ] اختبارات وحدة للخوارزميات (NFR-13)، مراجعة الأمان (NFR-04..06)
 - [x] Landing page بالهوية البصرية السورية (`pages/LandingPage.tsx` على `/welcome`). الزائر غير المسجّل اللي بيفتح `/` بيروح لـ `/welcome`؛ الروابط العميقة والخروج القسري (خمول/انتهاء) بيروحوا لـ `/login`. صفحة الدخول فيها رابط رجوع. الأنماط بآخر `theme.css`.
 - [x] **README + Docker (طلب المستخدم 2026-11-20):** `README.md` عربي بالجذر (لمحة، الوحدات، الأدوار، البنية + مخطط mermaid، التشغيل بـ Docker وبدونه، حسابات التجربة، الاختبارات، الأمان، هيكل المشروع). `docker-compose.yml` (db: postgres:18-alpine بيحمّل schema→defaults→seed أول مرة، face، backend، frontend: nginx على 8080 بيخدم React وبيمرّر `/api`). Dockerfile لكل من backend/frontend/face-service (الوجه بينزّل نموذجي OpenCV وقت البناء). الأسرار بـ `.env` بالجذر من `.env.docker.example`. Backend صار: `CORS_ORIGIN` و`TRUST_PROXY` من env، والاختبارات مستثناة من build. **⚠️ Docker مش مثبّت على جهاز المستخدم → ملفات Docker ما انختبرت فعلياً.**
-- [ ] رفع المشروع على GitHub (Private) — المستخدم بيعمل الـ repo وبعدين منرفع
+- [x] GitHub: **https://github.com/maroonnnn/school-management-system** (Public — اختيار المستخدم)، الفرع `main` مربوط بـ `origin`. أول رفع كان force push (استبدل README الفاضي يلي عمله GitHub — بموافقة المستخدم). بعد كل commit مهم: `git push`.
 - [ ] بيانات عرض نهائية + سيناريو المناقشة + إصلاحات
 
 ## القرارات
