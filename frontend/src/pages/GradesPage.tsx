@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useApi } from "../hooks/useApi";
 import { apiFetch } from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -157,7 +157,8 @@ function GradesPage() {
                           <thead className="table-light sticky-top"><tr><th>#</th><th>الطالب</th><th style={{ width: 120 }}>المحصّلة</th>{canCorrect && <th></th>}</tr></thead>
                           <tbody>
                             {detail.data?.students.map((st, i) => (
-                              <tr key={st.enrollment_id}>
+                              <Fragment key={st.enrollment_id}>
+                              <tr>
                                 <td className="text-secondary">{i + 1}</td>
                                 <td>{st.full_name}</td>
                                 <td>
@@ -175,6 +176,26 @@ function GradesPage() {
                                   )}</td>
                                 )}
                               </tr>
+                              {fix?.resultId === st.result_id && (
+                                <tr className="table-warning">
+                                  <td colSpan={4}>
+                                    <div className="d-flex flex-wrap gap-2 align-items-center py-1">
+                                      <span className="small">المحصّلة الصحيحة (الحالية {fix.old}):</span>
+                                      <input type="number" min={0} max={100} step="0.5" className="form-control form-control-sm" style={{ maxWidth: 100 }} aria-label="المحصّلة الصحيحة" autoFocus
+                                        value={fix.score} onChange={(e) => setFix({ ...fix, score: e.target.value })} />
+                                      <input className="form-control form-control-sm" style={{ maxWidth: 260 }} placeholder="سبب التصحيح (إلزامي)" value={fix.reason}
+                                        onChange={(e) => setFix({ ...fix, reason: e.target.value })} />
+                                      <button className="btn btn-warning btn-sm" disabled={!fix.reason.trim() || fix.score === "" || fix.score === fix.old}
+                                        onClick={() => act(`/grades/results/${fix.resultId}/correct`, "POST", { score: Number(fix.score), reason: fix.reason }, () => setFix(null))}>
+                                        حفظ التصحيح
+                                      </button>
+                                      <button className="btn btn-outline-secondary btn-sm" onClick={() => setFix(null)}>إلغاء</button>
+                                    </div>
+                                    <div className="small text-secondary">سيصل إشعار للمعلم بالتصحيح والسبب.</div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
                             ))}
                           </tbody>
                         </table>
@@ -195,24 +216,6 @@ function GradesPage() {
                         </button>
                         {missing > 0 && <span className="small text-secondary">{missing} طالب بدون محصّلة</span>}
                         {dirty && <span className="small text-secondary">احفظ قبل الرفع</span>}
-                      </div>
-                    )}
-
-                    {fix && (
-                      <div className="border rounded-3 p-3 mt-2 bg-light">
-                        <div className="fw-semibold mb-2">تصحيح محصّلة {fix.name} (الحالية {fix.old})</div>
-                        <div className="d-flex flex-wrap gap-2">
-                          <input type="number" min={0} max={100} step="0.5" className="form-control" style={{ maxWidth: 120 }} aria-label="المحصّلة الصحيحة"
-                            value={fix.score} onChange={(e) => setFix({ ...fix, score: e.target.value })} />
-                          <input className="form-control" style={{ maxWidth: 320 }} placeholder="سبب التصحيح (إلزامي)" value={fix.reason}
-                            onChange={(e) => setFix({ ...fix, reason: e.target.value })} />
-                          <button className="btn btn-warning" disabled={!fix.reason.trim() || fix.score === "" || fix.score === fix.old}
-                            onClick={() => act(`/grades/results/${fix.resultId}/correct`, "POST", { score: Number(fix.score), reason: fix.reason }, () => setFix(null))}>
-                            حفظ التصحيح
-                          </button>
-                          <button className="btn btn-outline-secondary" onClick={() => setFix(null)}>إلغاء</button>
-                        </div>
-                        <div className="small text-secondary mt-1">سيصل إشعار للمعلم بالتصحيح والسبب.</div>
                       </div>
                     )}
 
