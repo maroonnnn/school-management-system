@@ -8,11 +8,12 @@ import { handle, requireId } from "../utils/http.js";
 const router = Router();
 router.use(authenticateToken);
 
+// $1 = entity id (school/directorate) or 0, $2 = current user id. Personal notifications (user_id) reach every role.
 function target(u: AuthRequest["user"]): { sql: string; param: number } | null {
   if (!u) return null;
-  if (u.role === "SCHOOL_PRINCIPAL" || u.role === "SCHOOL_DEPUTY") return { sql: "n.school_id = $1", param: u.schoolId! };
-  if (u.role === "DIRECTORATE_ADMIN") return { sql: "n.directorate_id = $1", param: u.directorateId! };
-  return null;
+  if (u.role === "SCHOOL_PRINCIPAL" || u.role === "SCHOOL_DEPUTY") return { sql: "(n.school_id = $1 AND n.user_id IS NULL OR n.user_id = $2)", param: u.schoolId! };
+  if (u.role === "DIRECTORATE_ADMIN") return { sql: "(n.directorate_id = $1 AND n.user_id IS NULL OR n.user_id = $2)", param: u.directorateId! };
+  return { sql: "(n.user_id = $2 AND $1::bigint = 0)", param: 0 };
 }
 
 router.get(

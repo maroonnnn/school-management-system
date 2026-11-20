@@ -120,10 +120,10 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     path: "/grades",
-    label: "النتائج",
+    label: "المحصّلات",
     icon: "bi-journal-check",
-    description: "إدخال علامات الطلاب من الموجّه واعتمادها من مدير المدرسة.",
-    roles: ["SUPERVISOR", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "DIRECTORATE_ADMIN"],
+    description: "المعلم يدخل محصّلات طلابه لكل فصل ويرفعها، والموجّه يراجعها ويصحّحها.",
+    roles: ["TEACHER", "SUPERVISOR", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "DIRECTORATE_ADMIN"],
     group: "followup",
   },
   {

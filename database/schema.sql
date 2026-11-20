@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict iMvg4h6VkynnkYAI7INhOaulV9P4DWToWRnbfYPmO7Zno40qXy2F0ipXaZxWs4J
+\restrict NZhuaL8k2zro1DQHtc5ocrW0v9VQku3SZQUDtagkZWN13khvj1GkfBviqUSQvGs
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -25,31 +25,12 @@ SET row_security = off;
 
 CREATE FUNCTION public.permanent_quota(p_years integer) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT (r->>'quota')::int
-      FROM settings, jsonb_array_elements(value) r
-     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
-     ORDER BY (r->>'minYears')::int DESC
-     LIMIT 1
-$$;
-
-
---
--- Name: prevent_approved_grade_change(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.prevent_approved_grade_change() RETURNS trigger
-    LANGUAGE plpgsql
     AS $$
-DECLARE v_status varchar(20);
-BEGIN
-    SELECT status INTO v_status FROM assessments
-     WHERE id = COALESCE(NEW.assessment_id, OLD.assessment_id);
-    IF v_status = 'APPROVED' THEN
-        RAISE EXCEPTION 'لا يمكن تعديل علامات نتيجة معتمدة';
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
+    SELECT (r->>'quota')::int
+      FROM settings, jsonb_array_elements(value) r
+     WHERE key = 'permanent_quota_rules' AND (r->>'minYears')::int <= p_years
+     ORDER BY (r->>'minYears')::int DESC
+     LIMIT 1
 $$;
 
 
@@ -59,10 +40,10 @@ $$;
 
 CREATE FUNCTION public.prevent_attendance_event_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'أحداث الحضور الخام لا تقبل التعديل أو الحذف — استخدم التصحيحات';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'أحداث الحضور الخام لا تقبل التعديل أو الحذف — استخدم التصحيحات';
+END;
 $$;
 
 
@@ -72,10 +53,39 @@ $$;
 
 CREATE FUNCTION public.prevent_audit_log_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
-END;
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل التدقيق لا يقبل التعديل أو الحذف';
+END;
+$$;
+
+
+--
+-- Name: prevent_correction_change(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_correction_change() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'سجل تصحيح المحصّلات غير قابل للتعديل أو الحذف';
+END;
+$$;
+
+
+--
+-- Name: prevent_sheet_unsubmit(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.prevent_sheet_unsubmit() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    IF OLD.status = 'SUBMITTED' AND NEW.status <> 'SUBMITTED' THEN
+        RAISE EXCEPTION 'لا يمكن إعادة محصّلة مرفوعة إلى مسودة';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -85,16 +95,16 @@ $$;
 
 CREATE FUNCTION public.protect_sent_message() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF TG_OP = 'DELETE' AND OLD.status = 'SENT' THEN
-        RAISE EXCEPTION 'لا يمكن حذف رسالة بعد إرسالها';
-    END IF;
-    IF TG_OP = 'UPDATE' AND OLD.status = 'SENT' THEN
-        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
-    END IF;
-    RETURN COALESCE(NEW, OLD);
-END;
+    AS $$
+BEGIN
+    IF TG_OP = 'DELETE' AND OLD.status = 'SENT' THEN
+        RAISE EXCEPTION 'لا يمكن حذف رسالة بعد إرسالها';
+    END IF;
+    IF TG_OP = 'UPDATE' AND OLD.status = 'SENT' THEN
+        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
 $$;
 
 
@@ -104,17 +114,37 @@ $$;
 
 CREATE FUNCTION public.protect_sent_message_children() RETURNS trigger
     LANGUAGE plpgsql
+    AS $$
+DECLARE v_status varchar(10);
+BEGIN
+    SELECT status INTO v_status FROM messages WHERE id = COALESCE(NEW.message_id, OLD.message_id);
+    IF v_status = 'SENT' THEN
+        IF TG_TABLE_NAME = 'message_recipients' AND TG_OP = 'UPDATE'
+           AND NEW.message_id = OLD.message_id AND NEW.recipient_type = OLD.recipient_type
+           AND NEW.recipient_ref_id = OLD.recipient_ref_id THEN
+            RETURN NEW; -- read / acknowledge tracking is allowed
+        END IF;
+        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
+    END IF;
+    RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+
+--
+-- Name: protect_submitted_results(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.protect_submitted_results() RETURNS trigger
+    LANGUAGE plpgsql
     AS $$
-DECLARE v_status varchar(10);
+DECLARE v_status varchar(20);
 BEGIN
-    SELECT status INTO v_status FROM messages WHERE id = COALESCE(NEW.message_id, OLD.message_id);
-    IF v_status = 'SENT' THEN
-        IF TG_TABLE_NAME = 'message_recipients' AND TG_OP = 'UPDATE'
-           AND NEW.message_id = OLD.message_id AND NEW.recipient_type = OLD.recipient_type
-           AND NEW.recipient_ref_id = OLD.recipient_ref_id THEN
-            RETURN NEW; -- read / acknowledge tracking is allowed
+    SELECT status INTO v_status FROM result_sheets WHERE id = COALESCE(NEW.sheet_id, OLD.sheet_id);
+    IF v_status = 'SUBMITTED' THEN
+        IF TG_OP <> 'UPDATE' OR COALESCE(current_setting('app.result_correction', true), '') <> 'on' THEN
+            RAISE EXCEPTION 'المحصّلة مرفوعة — التعديل يتم بتصحيح من الموجّه فقط';
         END IF;
-        RAISE EXCEPTION 'لا يمكن تعديل رسالة بعد إرسالها';
     END IF;
     RETURN COALESCE(NEW, OLD);
 END;
@@ -127,10 +157,10 @@ $$;
 
 CREATE FUNCTION public.stage_allows_grade(p_stage smallint, p_grade integer) RETURNS boolean
     LANGUAGE sql IMMUTABLE
-    AS $$
-    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
-                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
-                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
+    AS $$
+    SELECT CASE p_stage WHEN 1 THEN p_grade BETWEEN 1 AND 6
+                        WHEN 2 THEN p_grade BETWEEN 7 AND 9
+                        WHEN 3 THEN p_grade BETWEEN 10 AND 12 ELSE false END
 $$;
 
 
@@ -140,19 +170,19 @@ $$;
 
 CREATE FUNCTION public.validate_attendance_sequence() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_window int;
-BEGIN
-    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
-    SELECT (value #>> '{}')::int INTO v_window FROM settings WHERE key = 'duplicate_event_window_minutes';
-    IF EXISTS (SELECT 1 FROM attendance_events
-                WHERE employee_assignment_id = NEW.employee_assignment_id
-                  AND event_type = NEW.event_type
-                  AND abs(extract(epoch FROM event_time - NEW.event_time)) < COALESCE(v_window, 2) * 60) THEN
-        RETURN NULL; -- duplicate: ignore
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_window int;
+BEGIN
+    PERFORM pg_advisory_xact_lock(NEW.employee_assignment_id);
+    SELECT (value #>> '{}')::int INTO v_window FROM settings WHERE key = 'duplicate_event_window_minutes';
+    IF EXISTS (SELECT 1 FROM attendance_events
+                WHERE employee_assignment_id = NEW.employee_assignment_id
+                  AND event_type = NEW.event_type
+                  AND abs(extract(epoch FROM event_time - NEW.event_time)) < COALESCE(v_window, 2) * 60) THEN
+        RETURN NULL; -- duplicate: ignore
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -162,15 +192,15 @@ $$;
 
 CREATE FUNCTION public.validate_class_grade_stage() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
-    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
-        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT stage INTO v_stage FROM schools WHERE id = NEW.school_id;
+    IF NOT stage_allows_grade(v_stage, NEW.grade_level) THEN
+        RAISE EXCEPTION 'الصف % لا يتبع لحلقة هذه المدرسة', NEW.grade_level;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -180,23 +210,23 @@ $$;
 
 CREATE FUNCTION public.validate_contract_hours() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
-BEGIN
-    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
-    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
-      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
-    IF v_type = 'CONTRACT' THEN
-        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
-          FROM employee_assignments
-         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
-        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
-            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
-                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
-        END IF;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_type varchar(20); v_allot numeric; v_total numeric;
+BEGIN
+    IF NEW.position_type <> 'TEACHER' OR NOT NEW.is_active THEN RETURN NEW; END IF;
+    SELECT employment_type, contract_weekly_hours INTO v_type, v_allot
+      FROM teacher_profiles WHERE employee_id = NEW.employee_id;
+    IF v_type = 'CONTRACT' THEN
+        SELECT COALESCE(SUM(weekly_quota_units), 0) INTO v_total
+          FROM employee_assignments
+         WHERE employee_id = NEW.employee_id AND is_active AND id <> NEW.id;
+        IF v_total + COALESCE(NEW.weekly_quota_units, 0) > v_allot THEN
+            RAISE EXCEPTION 'مجموع ساعات الوكيل في المدارس (%) يتجاوز ساعات تكليفه (%)',
+                v_total + COALESCE(NEW.weekly_quota_units, 0), v_allot;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -206,15 +236,15 @@ $$;
 
 CREATE FUNCTION public.validate_period_duration() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_minutes int;
-BEGIN
-    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
-    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
-        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_minutes int;
+BEGIN
+    SELECT (value #>> '{}')::int INTO v_minutes FROM settings WHERE key = 'lesson_duration_minutes';
+    IF NEW.end_time - NEW.start_time <> make_interval(mins => COALESCE(v_minutes, 45)) THEN
+        RAISE EXCEPTION 'مدة الحصة يجب أن تكون % دقيقة', COALESCE(v_minutes, 45);
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -224,14 +254,14 @@ $$;
 
 CREATE FUNCTION public.validate_school_stage_change() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
-                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
-        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM classes c WHERE c.school_id = NEW.id
+                AND NOT stage_allows_grade(NEW.stage, c.grade_level)) THEN
+        RAISE EXCEPTION 'لا يمكن تغيير الحلقة: يوجد صفوف لا تتبع للحلقة الجديدة';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -241,17 +271,17 @@ $$;
 
 CREATE FUNCTION public.validate_section_track() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_stage smallint;
-BEGIN
-    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
-    IF v_stage = 3 AND NEW.track IS NULL THEN
-        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
-    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
-        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_stage smallint;
+BEGIN
+    SELECT s.stage INTO v_stage FROM classes c JOIN schools s ON s.id = c.school_id WHERE c.id = NEW.class_id;
+    IF v_stage = 3 AND NEW.track IS NULL THEN
+        RAISE EXCEPTION 'شعب الحلقة الثالثة يجب أن يُحدَّد فرعها';
+    ELSIF v_stage <> 3 AND NEW.track IS NOT NULL THEN
+        RAISE EXCEPTION 'الفرع يُحدَّد لشعب الحلقة الثالثة فقط';
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -261,26 +291,26 @@ $$;
 
 CREATE FUNCTION public.validate_teacher_slot() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
-DECLARE v_emp bigint; v_clash text;
-BEGIN
-    SELECT ea.employee_id INTO v_emp
-      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-     WHERE ta.id = NEW.teaching_assignment_id;
-    SELECT c.name || ' / ' || sc.name INTO v_clash
-      FROM timetable_periods tp
-      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
-      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
-      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
-      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
-     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
-       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
-     LIMIT 1;
-    IF v_clash IS NOT NULL THEN
-        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
-    END IF;
-    RETURN NEW;
-END;
+    AS $$
+DECLARE v_emp bigint; v_clash text;
+BEGIN
+    SELECT ea.employee_id INTO v_emp
+      FROM teaching_assignments ta JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+     WHERE ta.id = NEW.teaching_assignment_id;
+    SELECT c.name || ' / ' || sc.name INTO v_clash
+      FROM timetable_periods tp
+      JOIN timetables t ON t.id = tp.timetable_id AND t.is_active
+      JOIN teaching_assignments ta ON ta.id = tp.teaching_assignment_id
+      JOIN employee_assignments ea ON ea.id = ta.employee_assignment_id
+      JOIN sections sc ON sc.id = tp.section_id JOIN classes c ON c.id = sc.class_id
+     WHERE ea.employee_id = v_emp AND tp.day_of_week = NEW.day_of_week
+       AND tp.period_number = NEW.period_number AND tp.id <> COALESCE(NEW.id, 0)
+     LIMIT 1;
+    IF v_clash IS NOT NULL THEN
+        RAISE EXCEPTION 'المعلم لديه حصة بنفس الوقت في %', v_clash;
+    END IF;
+    RETURN NEW;
+END;
 $$;
 
 
@@ -290,10 +320,10 @@ $$;
 
 CREATE FUNCTION public.years_of_service(p_employee_id bigint, p_on date DEFAULT CURRENT_DATE) RETURNS integer
     LANGUAGE sql STABLE
-    AS $$
-    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
-      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
-     WHERE e.id = p_employee_id
+    AS $$
+    SELECT COALESCE(EXTRACT(YEAR FROM age(p_on, e.hire_date))::int, tp.years_of_experience, 0)
+      FROM employees e LEFT JOIN teacher_profiles tp ON tp.employee_id = e.id
+     WHERE e.id = p_employee_id
 $$;
 
 
@@ -322,44 +352,6 @@ CREATE TABLE public.academic_years (
 
 ALTER TABLE public.academic_years ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.academic_years_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
--- Name: assessments; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.assessments (
-    id bigint NOT NULL,
-    teaching_assignment_id bigint NOT NULL,
-    title character varying(200) NOT NULL,
-    assessment_type character varying(50) NOT NULL,
-    assessment_date date NOT NULL,
-    max_score numeric(7,2) NOT NULL,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    status character varying(20) DEFAULT 'DRAFT'::character varying NOT NULL,
-    created_by bigint,
-    submitted_at timestamp with time zone,
-    approved_by bigint,
-    approved_at timestamp with time zone,
-    return_note text,
-    CONSTRAINT chk_assessment_approval CHECK ((((status)::text <> 'APPROVED'::text) OR ((approved_by IS NOT NULL) AND (approved_at IS NOT NULL)))),
-    CONSTRAINT chk_assessment_max_score CHECK ((max_score > (0)::numeric)),
-    CONSTRAINT chk_assessment_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SUBMITTED'::character varying)::text, ('APPROVED'::character varying)::text])))
-);
-
-
---
--- Name: assessments_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.assessments ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.assessments_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -654,36 +646,6 @@ CREATE TABLE public.face_embeddings (
 
 
 --
--- Name: grades; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.grades (
-    id bigint NOT NULL,
-    assessment_id bigint NOT NULL,
-    enrollment_id bigint NOT NULL,
-    score numeric(7,2) NOT NULL,
-    recorded_by bigint NOT NULL,
-    created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    CONSTRAINT chk_grade_score CHECK ((score >= (0)::numeric))
-);
-
-
---
--- Name: grades_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.grades ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
-    SEQUENCE NAME public.grades_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
 -- Name: lesson_executions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -755,7 +717,7 @@ CREATE TABLE public.message_recipients (
     opened_by bigint,
     acknowledged_at timestamp with time zone,
     acknowledged_by bigint,
-    CONSTRAINT chk_recipient_type CHECK (((recipient_type)::text = ANY ((ARRAY['DIRECTORATE'::character varying, 'SCHOOL'::character varying])::text[])))
+    CONSTRAINT chk_recipient_type CHECK (((recipient_type)::text = ANY (ARRAY[('DIRECTORATE'::character varying)::text, ('SCHOOL'::character varying)::text])))
 );
 
 
@@ -777,10 +739,10 @@ CREATE TABLE public.messages (
     target_summary character varying(200),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     sent_at timestamp with time zone,
-    CONSTRAINT chk_message_kind CHECK (((kind)::text = ANY ((ARRAY['CIRCULAR'::character varying, 'NOTICE'::character varying, 'MESSAGE'::character varying])::text[]))),
-    CONSTRAINT chk_message_sender CHECK (((sender_type)::text = ANY ((ARRAY['MINISTRY'::character varying, 'DIRECTORATE'::character varying, 'SCHOOL'::character varying])::text[]))),
+    CONSTRAINT chk_message_kind CHECK (((kind)::text = ANY (ARRAY[('CIRCULAR'::character varying)::text, ('NOTICE'::character varying)::text, ('MESSAGE'::character varying)::text]))),
+    CONSTRAINT chk_message_sender CHECK (((sender_type)::text = ANY (ARRAY[('MINISTRY'::character varying)::text, ('DIRECTORATE'::character varying)::text, ('SCHOOL'::character varying)::text]))),
     CONSTRAINT chk_message_sent_at CHECK ((((status)::text = 'SENT'::text) = (sent_at IS NOT NULL))),
-    CONSTRAINT chk_message_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SENT'::character varying])::text[]))),
+    CONSTRAINT chk_message_status CHECK (((status)::text = ANY (ARRAY[('DRAFT'::character varying)::text, ('SENT'::character varying)::text]))),
     CONSTRAINT chk_message_text CHECK (((length(TRIM(BOTH FROM subject)) > 0) AND (length(TRIM(BOTH FROM body)) > 0)))
 );
 
@@ -850,7 +812,8 @@ CREATE TABLE public.notifications (
     request_id bigint,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     message_id bigint,
-    CONSTRAINT chk_notification_target CHECK (((school_id IS NOT NULL) OR (directorate_id IS NOT NULL)))
+    user_id bigint,
+    CONSTRAINT chk_notification_target CHECK (((school_id IS NOT NULL) OR (directorate_id IS NOT NULL) OR (user_id IS NOT NULL)))
 );
 
 
@@ -982,6 +945,68 @@ CREATE TABLE public.request_status_history (
 
 ALTER TABLE public.request_status_history ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.request_status_history_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: result_corrections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.result_corrections (
+    id bigint NOT NULL,
+    result_id bigint NOT NULL,
+    old_score numeric(6,2) NOT NULL,
+    new_score numeric(6,2) NOT NULL,
+    reason text NOT NULL,
+    corrected_by bigint NOT NULL,
+    corrected_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT result_corrections_reason_check CHECK ((length(btrim(reason)) > 0))
+);
+
+
+--
+-- Name: result_corrections_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.result_corrections ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.result_corrections_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: result_sheets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.result_sheets (
+    id bigint NOT NULL,
+    teaching_assignment_id bigint NOT NULL,
+    term smallint NOT NULL,
+    status character varying(20) DEFAULT 'DRAFT'::character varying NOT NULL,
+    submitted_by bigint,
+    submitted_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_sheet_submitted CHECK ((((status)::text <> 'SUBMITTED'::text) OR ((submitted_by IS NOT NULL) AND (submitted_at IS NOT NULL)))),
+    CONSTRAINT result_sheets_status_check CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'SUBMITTED'::character varying])::text[]))),
+    CONSTRAINT result_sheets_term_check CHECK ((term = ANY (ARRAY[1, 2])))
+);
+
+
+--
+-- Name: result_sheets_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.result_sheets ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.result_sheets_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1317,6 +1342,34 @@ ALTER TABLE public.teaching_assignments ALTER COLUMN id ADD GENERATED ALWAYS AS 
 
 
 --
+-- Name: term_results; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.term_results (
+    id bigint NOT NULL,
+    sheet_id bigint NOT NULL,
+    enrollment_id bigint NOT NULL,
+    score numeric(6,2) NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT term_results_score_check CHECK (((score >= (0)::numeric) AND (score <= (100)::numeric)))
+);
+
+
+--
+-- Name: term_results_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.term_results ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.term_results_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
 -- Name: timetable_periods; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1454,14 +1507,6 @@ ALTER TABLE ONLY public.academic_years
 
 
 --
--- Name: assessments assessments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.assessments
-    ADD CONSTRAINT assessments_pkey PRIMARY KEY (id);
-
-
---
 -- Name: attendance_corrections attendance_corrections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1539,14 +1584,6 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.face_embeddings
     ADD CONSTRAINT face_embeddings_pkey PRIMARY KEY (employee_id);
-
-
---
--- Name: grades grades_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.grades
-    ADD CONSTRAINT grades_pkey PRIMARY KEY (id);
 
 
 --
@@ -1635,6 +1672,30 @@ ALTER TABLE ONLY public.request_comments
 
 ALTER TABLE ONLY public.request_status_history
     ADD CONSTRAINT request_status_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: result_corrections result_corrections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_corrections
+    ADD CONSTRAINT result_corrections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: result_sheets result_sheets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_sheets
+    ADD CONSTRAINT result_sheets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: result_sheets result_sheets_teaching_assignment_id_term_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_sheets
+    ADD CONSTRAINT result_sheets_teaching_assignment_id_term_key UNIQUE (teaching_assignment_id, term);
 
 
 --
@@ -1766,6 +1827,22 @@ ALTER TABLE ONLY public.teaching_assignments
 
 
 --
+-- Name: term_results term_results_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.term_results
+    ADD CONSTRAINT term_results_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: term_results term_results_sheet_id_enrollment_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.term_results
+    ADD CONSTRAINT term_results_sheet_id_enrollment_id_key UNIQUE (sheet_id, enrollment_id);
+
+
+--
 -- Name: timetable_periods timetable_periods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1779,14 +1856,6 @@ ALTER TABLE ONLY public.timetable_periods
 
 ALTER TABLE ONLY public.timetables
     ADD CONSTRAINT timetables_pkey PRIMARY KEY (id);
-
-
---
--- Name: grades uq_assessment_student; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.grades
-    ADD CONSTRAINT uq_assessment_student UNIQUE (assessment_id, enrollment_id);
 
 
 --
@@ -1883,13 +1952,6 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_username_key UNIQUE (username);
-
-
---
--- Name: idx_assessments_teaching; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_assessments_teaching ON public.assessments USING btree (teaching_assignment_id);
 
 
 --
@@ -1998,13 +2060,6 @@ CREATE INDEX idx_enrollments_student ON public.student_enrollments USING btree (
 
 
 --
--- Name: idx_grades_enrollment; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_grades_enrollment ON public.grades USING btree (enrollment_id);
-
-
---
 -- Name: idx_leaves_employee_dates; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2040,6 +2095,13 @@ CREATE INDEX idx_notifications_school ON public.notifications USING btree (schoo
 
 
 --
+-- Name: idx_notifications_user; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_user ON public.notifications USING btree (user_id) WHERE (user_id IS NOT NULL);
+
+
+--
 -- Name: idx_outages_school_time; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2058,6 +2120,13 @@ CREATE INDEX idx_period_timetable ON public.timetable_periods USING btree (timet
 --
 
 CREATE INDEX idx_request_comments ON public.request_comments USING btree (request_id, created_at);
+
+
+--
+-- Name: idx_result_corrections_result; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_result_corrections_result ON public.result_corrections USING btree (result_id);
 
 
 --
@@ -2152,13 +2221,6 @@ CREATE TRIGGER trg_contract_hours BEFORE INSERT OR UPDATE ON public.employee_ass
 
 
 --
--- Name: grades trg_grades_frozen_after_approval; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_grades_frozen_after_approval BEFORE INSERT OR DELETE OR UPDATE ON public.grades FOR EACH ROW EXECUTE FUNCTION public.prevent_approved_grade_change();
-
-
---
 -- Name: timetable_periods trg_period_duration; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2187,6 +2249,20 @@ CREATE TRIGGER trg_protect_sent_message BEFORE DELETE OR UPDATE ON public.messag
 
 
 --
+-- Name: term_results trg_protect_submitted_results; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_protect_submitted_results BEFORE INSERT OR DELETE OR UPDATE ON public.term_results FOR EACH ROW EXECUTE FUNCTION public.protect_submitted_results();
+
+
+--
+-- Name: result_corrections trg_result_corrections_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_result_corrections_immutable BEFORE DELETE OR UPDATE ON public.result_corrections FOR EACH ROW EXECUTE FUNCTION public.prevent_correction_change();
+
+
+--
 -- Name: schools trg_school_stage_change; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2201,6 +2277,13 @@ CREATE TRIGGER trg_section_track BEFORE INSERT OR UPDATE OF track, class_id ON p
 
 
 --
+-- Name: result_sheets trg_sheet_no_unsubmit; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_sheet_no_unsubmit BEFORE UPDATE ON public.result_sheets FOR EACH ROW EXECUTE FUNCTION public.prevent_sheet_unsubmit();
+
+
+--
 -- Name: timetable_periods trg_teacher_slot; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -2212,22 +2295,6 @@ CREATE TRIGGER trg_teacher_slot BEFORE INSERT OR UPDATE OF teaching_assignment_i
 --
 
 CREATE TRIGGER trg_validate_attendance_sequence BEFORE INSERT ON public.attendance_events FOR EACH ROW EXECUTE FUNCTION public.validate_attendance_sequence();
-
-
---
--- Name: assessments assessments_approved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.assessments
-    ADD CONSTRAINT assessments_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
-
-
---
--- Name: assessments assessments_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.assessments
-    ADD CONSTRAINT assessments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
 
 
 --
@@ -2327,14 +2394,6 @@ ALTER TABLE ONLY public.face_embeddings
 
 
 --
--- Name: assessments fk_assessment_teaching; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.assessments
-    ADD CONSTRAINT fk_assessment_teaching FOREIGN KEY (teaching_assignment_id) REFERENCES public.teaching_assignments(id) ON DELETE RESTRICT;
-
-
---
 -- Name: employee_assignments fk_assignment_employee; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2380,30 +2439,6 @@ ALTER TABLE ONLY public.student_enrollments
 
 ALTER TABLE ONLY public.student_enrollments
     ADD CONSTRAINT fk_enrollment_student FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE RESTRICT;
-
-
---
--- Name: grades fk_grade_assessment; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.grades
-    ADD CONSTRAINT fk_grade_assessment FOREIGN KEY (assessment_id) REFERENCES public.assessments(id) ON DELETE RESTRICT;
-
-
---
--- Name: grades fk_grade_enrollment; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.grades
-    ADD CONSTRAINT fk_grade_enrollment FOREIGN KEY (enrollment_id) REFERENCES public.student_enrollments(id) ON DELETE RESTRICT;
-
-
---
--- Name: grades fk_grade_user; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.grades
-    ADD CONSTRAINT fk_grade_user FOREIGN KEY (recorded_by) REFERENCES public.users(id) ON DELETE RESTRICT;
 
 
 --
@@ -2607,6 +2642,14 @@ ALTER TABLE ONLY public.notifications
 
 
 --
+-- Name: notifications notifications_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
 -- Name: power_outages power_outages_recorded_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2668,6 +2711,38 @@ ALTER TABLE ONLY public.request_status_history
 
 ALTER TABLE ONLY public.request_status_history
     ADD CONSTRAINT request_status_history_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.school_requests(id);
+
+
+--
+-- Name: result_corrections result_corrections_corrected_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_corrections
+    ADD CONSTRAINT result_corrections_corrected_by_fkey FOREIGN KEY (corrected_by) REFERENCES public.users(id);
+
+
+--
+-- Name: result_corrections result_corrections_result_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_corrections
+    ADD CONSTRAINT result_corrections_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.term_results(id);
+
+
+--
+-- Name: result_sheets result_sheets_submitted_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_sheets
+    ADD CONSTRAINT result_sheets_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES public.users(id);
+
+
+--
+-- Name: result_sheets result_sheets_teaching_assignment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.result_sheets
+    ADD CONSTRAINT result_sheets_teaching_assignment_id_fkey FOREIGN KEY (teaching_assignment_id) REFERENCES public.teaching_assignments(id);
 
 
 --
@@ -2735,6 +2810,22 @@ ALTER TABLE ONLY public.settings
 
 
 --
+-- Name: term_results term_results_enrollment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.term_results
+    ADD CONSTRAINT term_results_enrollment_id_fkey FOREIGN KEY (enrollment_id) REFERENCES public.student_enrollments(id);
+
+
+--
+-- Name: term_results term_results_sheet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.term_results
+    ADD CONSTRAINT term_results_sheet_id_fkey FOREIGN KEY (sheet_id) REFERENCES public.result_sheets(id);
+
+
+--
 -- Name: users users_directorate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2770,5 +2861,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict iMvg4h6VkynnkYAI7INhOaulV9P4DWToWRnbfYPmO7Zno40qXy2F0ipXaZxWs4J
+\unrestrict NZhuaL8k2zro1DQHtc5ocrW0v9VQku3SZQUDtagkZWN13khvj1GkfBviqUSQvGs
 

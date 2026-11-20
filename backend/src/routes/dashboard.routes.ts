@@ -6,6 +6,12 @@ import { getQuotaSummary, weekRange } from "../services/schedule.service.js";
 import { handle } from "../utils/http.js";
 
 // Home-page indicators, scoped to the user's role (early version of FR-DASH-01/02; aggregated numbers only).
+/** Term 1 = Sep..Jan, term 2 = Feb..Aug. */
+function currentTerm(): number {
+  const m = new Date().getMonth() + 1;
+  return m >= 9 || m === 1 ? 1 : 2;
+}
+
 const router = Router();
 router.use(authenticateToken);
 
@@ -97,18 +103,19 @@ router.get(
           WHERE ${scope} AND sr.status IN ('SUBMITTED', 'UNDER_REVIEW')`, params);
     }
     if (u.role === "SCHOOL_PRINCIPAL" || u.role === "SCHOOL_DEPUTY") {
-      await q("grades_to_approve",
-        `SELECT COUNT(*) n FROM assessments a JOIN teaching_assignments ta ON ta.id = a.teaching_assignment_id
-          JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
-          WHERE c.school_id = $1 AND a.status = 'SUBMITTED'`, [u.schoolId]);
+      await q("results_not_submitted",
+        `SELECT COUNT(*) n FROM teaching_assignments ta JOIN sections sc ON sc.id = ta.section_id
+          JOIN classes c ON c.id = sc.class_id
+          LEFT JOIN result_sheets rs ON rs.teaching_assignment_id = ta.id AND rs.term = $2
+          WHERE c.school_id = $1 AND ta.is_active AND rs.status IS DISTINCT FROM 'SUBMITTED'`, [u.schoolId, currentTerm()]);
       await q("my_requests_open",
         `SELECT COUNT(*) n FROM school_requests WHERE school_id = $1 AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'IN_PROGRESS', 'COMPLETED')`, [u.schoolId]);
     }
     if (u.role === "SUPERVISOR") {
-      await q("grades_draft",
-        `SELECT COUNT(*) n FROM assessments a JOIN teaching_assignments ta ON ta.id = a.teaching_assignment_id
+      await q("results_submitted_recent",
+        `SELECT COUNT(*) n FROM result_sheets rs JOIN teaching_assignments ta ON ta.id = rs.teaching_assignment_id
           JOIN sections sc ON sc.id = ta.section_id JOIN classes c ON c.id = sc.class_id
-          WHERE c.school_id = $1 AND a.status = 'DRAFT'`, [u.schoolId]);
+          WHERE c.school_id = $1 AND rs.status = 'SUBMITTED' AND rs.submitted_at > now() - interval '14 days'`, [u.schoolId]);
     }
     if (u.role !== "MINISTRY_ADMIN") {
       await q("on_leave_today",

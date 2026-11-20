@@ -408,24 +408,47 @@ insert("power_outages", ["school_id", "starts_at", "ends_at", "outage_type", "no
 insert("attendance_corrections", ["employee_assignment_id", "work_date", "corrected_status", "reason", "proposed_by",
                                   "status", "decided_by", "decided_at"], correction_rows)
 
-# ---------------- results (FR-DATA-07): one approved + one draft assessment per school ----------------
-assessments, grade_rows, approve_sql = [], [], []
+# ---------------- term results / المحصّلات (FR-DATA-07, migration 010) ----------------
+# Term 1: per school, Arabic + math of the first 2 sections. Math of section 1 gets one supervisor correction
+# (+ personal notification to the teacher); Arabic of section 2 stays a teacher draft.
+SUBJECT_NAME = {s: n for s, n, _ in SUBJECTS}
+teacher_user_by_emp = {u[9]: u[0] for u in users if u[1] == 6}
+sheet_rows, result_rows, corr_rows, grade_notif, submit_sql = [], [], [], [], []
+result_id = 0
 for school_id, _, _, _ in SCHOOLS:
-    sup, principal = supervisor_users[school_id], school_users[school_id][0]
+    sup = supervisor_users[school_id]
     first_sections = sorted({ta[2] for ta in teaching if next(a[2] for a in assignments if a[0] == ta[1]) == school_id})[:2]
     for k, sec in enumerate(first_sections):
-        ta = next(t for t in teaching if t[2] == sec and t[3] == 2)  # math
-        aid = len(assessments) + 1
-        assessments.append((aid, ta[0], "مذاكرة الرياضيات الأولى", "QUIZ", date(2026, 10, 20), 20, sup))
-        for enr in section_enrollments[sec]:
-            grade_rows.append((aid, enr, round(random.uniform(8, 20) * 2) / 2, sup))
-        if k == 0:
-            approve_sql.append(
-                f"UPDATE assessments SET status='APPROVED', submitted_at='2026-10-22 10:00+03', "
-                f"approved_by={principal}, approved_at='2026-10-23 09:00+03' WHERE id={aid};")
-insert("assessments", ["id", "teaching_assignment_id", "title", "assessment_type", "assessment_date", "max_score", "created_by"], assessments)
-insert("grades", ["assessment_id", "enrollment_id", "score", "recorded_by"], grade_rows)
-sql.extend(approve_sql)
+        for subj in (1, 2):
+            ta = next(t for t in teaching if t[2] == sec and t[3] == subj)
+            t_user = teacher_user_by_emp[ea_emp[ta[1]]]
+            sheet_id = len(sheet_rows) + 1
+            draft = (k == 1 and subj == 1)
+            sheet_rows.append((sheet_id, ta[0], 1))
+            enrs = section_enrollments[sec][: (15 if draft else None)]
+            first_result = result_id + 1
+            for enr in enrs:
+                result_id += 1
+                result_rows.append((result_id, sheet_id, enr, round(random.uniform(45, 98) * 2) / 2))
+            if not draft:
+                submit_sql.append(f"UPDATE result_sheets SET status='SUBMITTED', submitted_by={t_user}, "
+                                  f"submitted_at='2026-11-05 11:00+03' WHERE id={sheet_id};")
+            if k == 0 and subj == 2:
+                old = result_rows[first_result - 1][3]
+                new_score = min(100, old + 10)
+                submit_sql.append("SET app.result_correction = 'on';")
+                submit_sql.append(f"UPDATE term_results SET score={new_score} WHERE id={first_result};")
+                submit_sql.append("RESET app.result_correction;")
+                corr_rows.append((first_result, old, new_score, "خطأ في جمع علامة المذاكرة مع الشفهي", sup, "2026-11-07 09:30:00+03"))
+                grade_notif.append((t_user, "تم تصحيح محصّلة من قبل الموجّه",
+                                    f"{SUBJECT_NAME[subj]} — الفصل الأول: من {old} إلى {new_score}", "/grades", "2026-11-07 09:30:00+03"))
+insert("result_sheets", ["id", "teaching_assignment_id", "term"], sheet_rows)
+insert("term_results", ["id", "sheet_id", "enrollment_id", "score"], result_rows)
+# submit first (corrections only apply to submitted sheets) — order: submit, then correction UPDATE
+sql.extend([x for x in submit_sql if x.startswith("UPDATE result_sheets")])
+sql.extend([x for x in submit_sql if not x.startswith("UPDATE result_sheets")])
+insert("result_corrections", ["result_id", "old_score", "new_score", "reason", "corrected_by", "corrected_at"], corr_rows)
+insert("notifications", ["user_id", "title", "body", "link", "created_at"], grade_notif)
 
 # ---------------- messages & circulars (FR-MSG) ----------------
 ministry_user = 1

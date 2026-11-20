@@ -22,9 +22,9 @@ interface TeacherSummary {
 
 const ATTENTION: Record<string, { label: string; icon: string; to: string }> = {
   requests_pending: { label: "طلبات مدارس بانتظار المراجعة", icon: "bi-inbox", to: "/requests/review" },
-  grades_to_approve: { label: "نتائج بانتظار اعتمادك", icon: "bi-journal-check", to: "/grades" },
+  results_not_submitted: { label: "محصّلات الفصل الحالي لم تُرفع بعد", icon: "bi-journal-check", to: "/grades" },
+  results_submitted_recent: { label: "محصّلات رُفعت خلال أسبوعين", icon: "bi-journal-check", to: "/grades" },
   my_requests_open: { label: "طلبات المدرسة المفتوحة", icon: "bi-send", to: "/requests" },
-  grades_draft: { label: "نتائج مسودة لم تُرسل بعد", icon: "bi-pencil-square", to: "/grades" },
   on_leave_today: { label: "موظفون في إجازة اليوم", icon: "bi-calendar-x", to: "/quota" },
 };
 
