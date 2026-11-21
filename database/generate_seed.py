@@ -1,16 +1,28 @@
 """
 Generates database/seed.sql — Pilot data: 1 ministry, 1 directorate, 5 schools.
-Deterministic (fixed random seed). Run:  python database/generate_seed.py
+Deterministic (fixed random seed). Run:  python database/generate_seed.py [YYYY-MM-DD]   (or use database/rebuild.ps1)
 All test users share the password: Test@1234
 """
 import random
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 random.seed(2026)
 OUT = Path(__file__).with_name("seed.sql")
 PWD_HASH = "$2b$10$SAKUlO8Oz4TTGlHoKAhODOV6ol.mZx4rI7KLzszf7sSfowAnTAJmq"  # Test@1234
-TODAY = date(2026, 11, 19)  # last day with attendance data — move forward before the demo and rebuild
+
+
+def _last_working_day(d: date) -> date:
+    d -= timedelta(days=1)
+    while d.weekday() not in (6, 0, 1, 2, 3):  # Sun..Thu
+        d -= timedelta(days=1)
+    return d
+
+
+# Last day with attendance data. Default: the last working day before today, so a rebuild right before the
+# discussion always gives "fresh" data. Override: python generate_seed.py 2026-12-10
+TODAY = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else _last_working_day(date.today())
 YEAR_START = date(2026, 9, 1)
 
 sql: list[str] = []

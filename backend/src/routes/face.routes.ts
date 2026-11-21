@@ -20,14 +20,14 @@ router.get(
   "/challenge",
   handle<AuthRequest>(async (req, res) => {
     const challenge = crypto.randomInt(2) === 0 ? "LEFT" : "RIGHT";
-    const token = jwt.sign({ purpose: "face", challenge, uid: req.user!.id, n: crypto.randomUUID() }, process.env.JWT_SECRET!, { expiresIn: "90s" });
+    const token = jwt.sign({ purpose: "face", challenge, uid: req.user!.id, n: crypto.randomUUID() }, process.env.JWT_SECRET!, { expiresIn: "90s", algorithm: "HS256" });
     res.json({ success: true, data: { challenge, token } });
   })
 );
 
 function readChallenge(req: AuthRequest): string {
   try {
-    const p = jwt.verify(String(req.body?.challengeToken ?? ""), process.env.JWT_SECRET!) as { purpose: string; challenge: string; uid: number };
+    const p = jwt.verify(String(req.body?.challengeToken ?? ""), process.env.JWT_SECRET!, { algorithms: ["HS256"] }) as { purpose: string; challenge: string; uid: number };
     if (p.purpose !== "face" || p.uid !== req.user!.id) throw new Error();
     return p.challenge;
   } catch {

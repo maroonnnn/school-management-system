@@ -2,6 +2,7 @@
 import { audit } from "../services/audit.service.js";
 import { Router, Request, Response } from "express";
 import { loginUser } from "../services/auth.service.js";
+import { loginLimiter, recordLoginFailure, recordLoginSuccess } from "../middleware/loginLimiter.js";
 import {
   authenticateToken,
   AuthRequest,
@@ -10,7 +11,7 @@ import {
 const router = Router();
 
 // Login
-router.post("/login", async (req: Request, res: Response) => {
+router.post("/login", loginLimiter, async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
 
@@ -27,6 +28,7 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     const result = await loginUser(username.trim(), password);
+    recordLoginSuccess(req);
     void audit({ userId: result.user.id, action: "LOGIN", req });
 
     return res.status(200).json({
@@ -42,6 +44,7 @@ router.post("/login", async (req: Request, res: Response) => {
 
     const status = message.includes("غير صحيحة") ? 401 : 500;
     if (status === 401) {
+      recordLoginFailure(req);
       void audit({
         userId: null,
         action: "LOGIN_FAILED",

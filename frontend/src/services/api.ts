@@ -51,6 +51,10 @@ export async function apiFetch<T = unknown>(path: string, options: RequestInit =
     throw new ApiError(0, "تعذر الاتصال بالخادم");
   }
 
+  // Sliding session: the server re-issues the token while the user is active (idle timeout is enforced server-side)
+  const refreshed = response.headers.get("X-Refreshed-Token");
+  if (refreshed && token) setToken(refreshed);
+
   const body = await response.json().catch(() => null);
 
   if (response.status === 401 && token) onUnauthorized?.();

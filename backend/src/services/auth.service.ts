@@ -1,7 +1,7 @@
 
 import pool from "../config/database.js";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { signSession, type Role } from "../middleware/auth.middleware.js";
 
 interface LoginResult {
   id: number;
@@ -58,18 +58,15 @@ export async function loginUser(username: string, password: string) {
     throw new Error("JWT_SECRET غير مضبوط في إعدادات الخادم");
   }
 
-  const token = jwt.sign(
+  const token = signSession(
     {
       id: Number(user.id),
-      role: user.role_name,
+      role: user.role_name as Role,
       employeeId: user.employee_id ? Number(user.employee_id) : null,
       schoolId: user.school_id ? Number(user.school_id) : null,
-      directorateId: user.directorate_id
-        ? Number(user.directorate_id)
-        : null,
+      directorateId: user.directorate_id ? Number(user.directorate_id) : null,
     },
-    secret,
-    { expiresIn: "8h" }
+    secret
   );
 
   return {

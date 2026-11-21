@@ -331,7 +331,7 @@ router.get(
     const f = await pool.query("SELECT file_name, file_path, file_type FROM request_attachments WHERE id = $1 AND request_id = $2", [requireId(req.params.fileId), id]);
     if (!f.rowCount) throw new HttpError(404, "المرفق غير موجود");
     const full = path.resolve(UPLOAD_DIR, f.rows[0].file_path);
-    if (!full.startsWith(UPLOAD_DIR)) throw new HttpError(400, "مسار غير صالح");
+    if (!full.startsWith(UPLOAD_DIR + path.sep)) throw new HttpError(400, "مسار غير صالح");
     res.setHeader("Content-Type", f.rows[0].file_type);
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(f.rows[0].file_name)}`);
     res.send(await fs.readFile(full));
