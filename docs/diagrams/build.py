@@ -23,16 +23,16 @@ MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.esm.min.mjs"
 
 # (file, title, tables). Tables referenced from a part but not listed in it appear as key-only context entities.
 ERD_PARTS = [
-    ("erd_1_organisation", ["ministries", "directorates", "schools", "roles", "users", "employees",
-                            "employee_assignments", "teacher_profiles", "school_deputy_authorizations"]),
-    ("erd_2_academic", ["academic_years", "classes", "sections", "students", "student_enrollments", "subjects",
-                        "teaching_assignments", "timetables", "timetable_periods"]),
-    ("erd_3_attendance", ["attendance_events", "face_embeddings", "attendance_corrections", "power_outages"]),
-    ("erd_4_leave_lessons_reports", ["employee_leaves", "lesson_executions", "report_approvals"]),
-    ("erd_5_requests_messages", ["school_requests", "request_status_history", "request_attachments", "request_comments",
-                                 "notifications", "notification_reads", "messages", "message_recipients",
-                                 "message_attachments"]),
-    ("erd_6_results_audit", ["result_sheets", "term_results", "result_corrections", "audit_logs"]),
+    ("erd_1_organisation", ["ministries", "directorates", "schools", "roles", "users"]),
+    ("erd_2_staff", ["employees", "employee_assignments", "teacher_profiles", "school_deputy_authorizations"]),
+    ("erd_3_classes_students", ["academic_years", "classes", "sections", "students", "student_enrollments"]),
+    ("erd_4_teaching_timetables", ["subjects", "teaching_assignments", "timetables", "timetable_periods"]),
+    ("erd_5_attendance", ["attendance_events", "face_embeddings", "attendance_corrections", "power_outages"]),
+    ("erd_6_leave_lessons_reports", ["employee_leaves", "lesson_executions", "report_approvals"]),
+    ("erd_7_requests", ["school_requests", "request_status_history", "request_attachments", "request_comments"]),
+    ("erd_8_messages_notifications", ["messages", "message_recipients", "message_attachments", "notifications",
+                                      "notification_reads"]),
+    ("erd_9_results_audit", ["result_sheets", "term_results", "result_corrections", "audit_logs"]),
 ]
 SKIP_COLS = {"created_at", "updated_at"}
 MAX_PLAIN_COLS = 5

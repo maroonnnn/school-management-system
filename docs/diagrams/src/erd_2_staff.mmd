@@ -1,0 +1,48 @@
+erDiagram
+  directorates |o--o{ employee_assignments : directorate_id
+  schools |o--o{ employee_assignments : school_id
+  employees ||--o{ employee_assignments : employee_id
+  employees ||--o{ teacher_profiles : employee_id
+  schools ||--o{ school_deputy_authorizations : school_id
+  employees {
+    bigint id PK
+    varchar employee_number
+    varchar full_name
+    varchar phone
+    varchar email
+    date hire_date
+  }
+  employee_assignments {
+    bigint id PK
+    bigint employee_id FK
+    bigint school_id FK
+    bigint directorate_id FK
+    varchar position_type
+    varchar work_schedule_type
+    numeric weekly_quota_units
+    date start_date
+    date end_date
+  }
+  teacher_profiles {
+    bigint employee_id PK
+    varchar specialization
+    varchar qualification
+    integer years_of_experience
+    varchar employment_type
+    numeric contract_weekly_hours
+  }
+  school_deputy_authorizations {
+    bigint id PK
+    bigint school_id FK
+    bigint deputy_user_id FK
+    bigint authorized_by FK
+    timestamptz authorized_at
+    timestamptz revoked_at
+    boolean is_active
+  }
+  directorates {
+    bigint id PK
+  }
+  schools {
+    bigint id PK
+  }

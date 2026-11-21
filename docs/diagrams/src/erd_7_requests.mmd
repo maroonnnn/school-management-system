@@ -1,0 +1,49 @@
+erDiagram
+  school_requests ||--o{ request_attachments : request_id
+  school_requests ||--o{ request_comments : request_id
+  school_requests ||--o{ request_status_history : request_id
+  schools ||--o{ school_requests : school_id
+  employees |o--o{ school_requests : target_employee_id
+  school_requests {
+    bigint id PK
+    varchar request_number
+    bigint school_id FK
+    bigint created_by FK
+    varchar request_type
+    varchar title
+    text description
+    numeric priority_score
+    bigint assigned_to FK
+    bigint target_employee_id FK
+  }
+  request_status_history {
+    bigint id PK
+    bigint request_id FK
+    varchar old_status
+    varchar new_status
+    bigint changed_by FK
+    text notes
+    timestamptz changed_at
+  }
+  request_attachments {
+    bigint id PK
+    bigint request_id FK
+    bigint uploaded_by FK
+    varchar file_name
+    text file_path
+    varchar file_type
+    bigint file_size
+    timestamptz uploaded_at
+  }
+  request_comments {
+    bigint id PK
+    bigint request_id FK
+    bigint author_id FK
+    text body
+  }
+  employees {
+    bigint id PK
+  }
+  schools {
+    bigint id PK
+  }

@@ -1,0 +1,1 @@
+{ "name": "report-builder", "private": true, "version": "1.0.0", "description": "Builds the final-year report skeleton (Word) from the project", "scripts": { "build": "node build_report.js" }, "dependencies": { "docx": "^9.0.0" } }

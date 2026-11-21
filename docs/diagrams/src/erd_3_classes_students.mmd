@@ -1,0 +1,46 @@
+erDiagram
+  academic_years ||--o{ classes : academic_year_id
+  schools ||--o{ classes : school_id
+  sections ||--o{ student_enrollments : section_id
+  students ||--o{ student_enrollments : student_id
+  classes ||--o{ sections : class_id
+  academic_years {
+    bigint id PK
+    varchar name
+    date start_date
+    date end_date
+    boolean is_current
+  }
+  classes {
+    bigint id PK
+    bigint school_id FK
+    bigint academic_year_id FK
+    varchar name
+    integer grade_level
+  }
+  sections {
+    bigint id PK
+    bigint class_id FK
+    varchar name
+    integer capacity
+    varchar track
+  }
+  students {
+    bigint id PK
+    varchar student_number
+    varchar full_name
+    date date_of_birth
+    varchar guardian_name
+    varchar guardian_phone
+  }
+  student_enrollments {
+    bigint id PK
+    bigint student_id FK
+    bigint section_id FK
+    date enrollment_date
+    date withdrawal_date
+    varchar status
+  }
+  schools {
+    bigint id PK
+  }
