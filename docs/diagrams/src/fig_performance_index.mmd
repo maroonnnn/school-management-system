@@ -1,0 +1,23 @@
+flowchart LR
+  subgraph P["Performance index (higher is better)"]
+    P1["Attendance<br/>80% maps to 0, 100% to 1"]
+    P2["Quota completion"]
+    P3["Request handling speed"]
+    P4["Results average"]
+  end
+  subgraph N["Need index (higher needs more support)"]
+    N1["Teacher shortage<br/>open requests"]
+    N2["Possible absence rate"]
+    N3["Overdue requests"]
+    N4["Results decline<br/>against the previous term"]
+  end
+  P1 --> PS["Weighted score 0-100<br/>factors without data are dropped<br/>and weights re-normalised"]
+  P2 --> PS
+  P3 --> PS
+  P4 --> PS
+  N1 --> NS["Weighted score 0-100"]
+  N2 --> NS
+  N3 --> NS
+  N4 --> NS
+  PS --> RK["Ranking inside the directorate<br/>with a plain-language explanation"]
+  NS --> RK

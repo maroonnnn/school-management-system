@@ -1,0 +1,20 @@
+stateDiagram-v2
+  direction TB
+  state "Under review" as UnderReview
+  state "In progress" as InProgress
+  [*] --> Draft
+  Draft --> Submitted: school submits
+  Submitted --> UnderReview: directorate starts review
+  Submitted --> Returned: directorate asks for clarification
+  UnderReview --> Returned: directorate asks for clarification
+  Returned --> UnderReview: school replies
+  Submitted --> Approved: directorate approves
+  UnderReview --> Approved: directorate approves
+  Submitted --> Rejected: rejects (reason required)
+  UnderReview --> Rejected: rejects (reason required)
+  Approved --> InProgress: directorate starts work
+  Approved --> Completed: directorate completes
+  InProgress --> Completed: directorate completes
+  Completed --> Closed: school confirms
+  Rejected --> [*]
+  Closed --> [*]

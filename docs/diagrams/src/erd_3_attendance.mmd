@@ -1,0 +1,54 @@
+erDiagram
+  employee_assignments ||--o{ attendance_corrections : employee_assignment_id
+  employee_assignments ||--o{ attendance_events : employee_assignment_id
+  employees ||--o{ face_embeddings : employee_id
+  schools ||--o{ power_outages : school_id
+  attendance_events {
+    bigint id PK
+    bigint employee_assignment_id FK
+    varchar event_type
+    timestamptz event_time
+    timestamptz recorded_at
+    varchar verification_method
+    bigint recorded_by FK
+    text manual_reason
+  }
+  face_embeddings {
+    bigint employee_id PK
+    bytea ciphertext
+    bytea iv
+    bytea auth_tag
+    varchar model
+    jsonb quality
+    bigint enrolled_by FK
+  }
+  attendance_corrections {
+    bigint id PK
+    bigint employee_assignment_id FK
+    date work_date
+    varchar corrected_status
+    time_without_time_zone corrected_in
+    time_without_time_zone corrected_out
+    text reason
+    bigint proposed_by FK
+    bigint decided_by FK
+  }
+  power_outages {
+    bigint id PK
+    bigint school_id FK
+    timestamptz starts_at
+    timestamptz ends_at
+    varchar outage_type
+    text notes
+    bigint recorded_by FK
+    timestamptz recorded_at
+  }
+  employee_assignments {
+    bigint id PK
+  }
+  employees {
+    bigint id PK
+  }
+  schools {
+    bigint id PK
+  }

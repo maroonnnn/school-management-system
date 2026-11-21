@@ -1,0 +1,15 @@
+flowchart TD
+  S(["Accepted events of one employee<br/>for one working day"]) --> C{"Approved<br/>correction?"}
+  C -- yes --> R1["CORRECTED<br/>(status set by the correction)"]
+  C -- no --> L{"On leave or<br/>official assignment?"}
+  L -- yes --> R2["EXCUSED"]
+  L -- no --> X{"Duty scheduled<br/>on this day?"}
+  X -- no --> R3["NO DUTY"]
+  X -- yes --> E{"Any events?"}
+  E -- no --> O{"Duty overlaps a<br/>recorded power outage?"}
+  O -- yes --> R4["OUTAGE EXEMPT"]
+  O -- no --> R5["POSSIBLE ABSENCE<br/>(needs manager review)"]
+  E -- yes --> M{"Unpaired IN or OUT?"}
+  M -- yes --> R6["INCOMPLETE REGISTRATION"]
+  M -- no --> T["Compare first IN and last OUT<br/>with expected hours and tolerance"]
+  T --> OUT["PRESENT, LATE, EARLY LEAVE<br/>or LATE AND EARLY LEAVE<br/>(lateness inside an outage is not counted)"]

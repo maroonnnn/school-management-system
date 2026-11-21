@@ -1,0 +1,26 @@
+flowchart LR
+  subgraph CLIENT["Client"]
+    direction TB
+    SPA["Web application<br/>React 19, TypeScript,<br/>Bootstrap 5 (RTL)"]
+    CAM["Browser camera<br/>(attendance kiosk)"]
+    CAM --> SPA
+  end
+  subgraph APP["Application server"]
+    direction TB
+    MW["Middleware<br/>JWT, role check, scope isolation,<br/>audit log, login lockout"]
+    RT["Routes<br/>auth, users, schools, employees,<br/>academics, schedule, attendance,<br/>face, requests, messages, grades,<br/>reports, dashboard, analytics"]
+    SV["Services<br/>business rules and SQL"]
+    AL["Pure algorithms (unit tested)<br/>attendance classifier, request priority,<br/>school performance index,<br/>anomaly detection"]
+    MW --> RT --> SV --> AL
+  end
+  subgraph STORE["Data"]
+    direction TB
+    DB[("PostgreSQL<br/>39 tables, triggers, views")]
+    FS[("File storage<br/>request and message<br/>attachments")]
+  end
+  FACE["Face service<br/>Python, FastAPI<br/>OpenCV YuNet and SFace"]
+  CLIENT -->|"HTTPS, JSON, bearer token"| APP
+  APP -->|"parameterised SQL"| DB
+  APP --> FS
+  APP -->|"camera frames (memory only)"| FACE
+  FACE -->|"embedding vector"| APP

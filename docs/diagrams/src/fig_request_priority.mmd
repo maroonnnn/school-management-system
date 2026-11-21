@@ -1,0 +1,19 @@
+flowchart LR
+  subgraph IN["Inputs, each normalised to 0-1"]
+    F1["Severity<br/>(1 to 5 set by the school)"]
+    F2["Affected students<br/>share of the school"]
+    F3["Waiting time<br/>reaches 1 at twice the overdue limit"]
+    F4["School fragility<br/>absence rate and open requests"]
+    F5["Repetition<br/>same type in the last 180 days"]
+  end
+  W["Weights from settings<br/>re-normalised to sum 1"]
+  SUM["Weighted sum x 100<br/>priority score 0-100"]
+  WHY["Text explanation:<br/>top factors and their contribution"]
+  F1 --> SUM
+  F2 --> SUM
+  F3 --> SUM
+  F4 --> SUM
+  F5 --> SUM
+  W --> SUM
+  SUM --> WHY
+  SUM --> N["Computed at display time,<br/>never stored. Used only to sort."]

@@ -1,0 +1,12 @@
+flowchart TD
+  A["Teacher enters one total (0-100)<br/>per student, subject and term"] --> B{"All students<br/>have a result?"}
+  B -- no --> A
+  B -- yes --> C["Teacher submits the sheet"]
+  C --> D["Sheet locked<br/>(database trigger blocks any edit)"]
+  D --> E["Supervisor reviews<br/>submitted results"]
+  E --> F{"Mistake found?"}
+  F -- no --> G(["Final"])
+  F -- yes --> H["Supervisor corrects one result<br/>and must give a reason"]
+  H --> I["Correction logged<br/>old value, new value, reason, author"]
+  H --> J["Teacher receives a personal notification"]
+  I --> E

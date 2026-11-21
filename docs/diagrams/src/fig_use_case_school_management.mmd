@@ -1,0 +1,25 @@
+flowchart LR
+  PRI(["School<br/>principal"])
+  DEP(["Deputy<br/>principal"])
+  subgraph SYS["School management"]
+    U8["Enrol faces and run<br/>the attendance kiosk"]
+    U10["Approve monthly<br/>teacher reports"]
+    U3["Send messages to<br/>the directorate"]
+    U12["Export reports<br/>(Excel and PDF)"]
+    U7["Manage staff, students<br/>and timetables"]
+    U9["Review attendance and<br/>approve corrections"]
+    U11["Submit school requests"]
+    U2["View school indicators<br/>and alerts"]
+  end
+  PRI --- U8
+  PRI --- U10
+  PRI --- U3
+  PRI --- U12
+  PRI --- U7
+  PRI --- U9
+  PRI --- U11
+  PRI --- U2
+  DEP --- U7
+  DEP --- U9
+  DEP --- U11
+  DEP --- U2

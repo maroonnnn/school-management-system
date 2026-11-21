@@ -1,0 +1,21 @@
+sequenceDiagram
+  actor S as Staff member
+  participant K as Kiosk (React)
+  participant A as API (Express)
+  participant F as Face service (Python)
+  participant D as PostgreSQL
+  K->>A: GET /face/challenge
+  A-->>K: random head-turn direction, signed token (90 s)
+  S->>K: stands in front of the camera
+  K->>K: capture 3 frontal frames and 5 turning frames
+  K->>A: POST /face/check (frames, challenge token)
+  A->>A: verify token and kiosk user
+  A->>F: POST /process (frames, challenge)
+  F->>F: single face, same person, head turn (liveness)
+  F-->>A: embedding vector (128 values)
+  Note over F: images discarded immediately
+  A->>D: load encrypted embeddings of this school
+  D-->>A: AES-256-GCM ciphertexts
+  A->>A: decrypt, cosine similarity, single threshold
+  A->>D: insert attendance event (IN or OUT by last movement), match score
+  A-->>K: employee name, event type, time

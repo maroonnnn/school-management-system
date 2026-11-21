@@ -1,0 +1,40 @@
+erDiagram
+  employees ||--o{ employee_leaves : employee_id
+  timetable_periods ||--o{ lesson_executions : timetable_period_id
+  employee_assignments ||--o{ report_approvals : employee_assignment_id
+  employee_leaves {
+    bigint id PK
+    bigint employee_id FK
+    varchar leave_type
+    date start_date
+    date end_date
+    text notes
+    bigint created_by FK
+  }
+  lesson_executions {
+    bigint id PK
+    bigint timetable_period_id FK
+    date lesson_date
+    varchar status
+    text notes
+    bigint recorded_by FK
+    timestamptz recorded_at
+  }
+  report_approvals {
+    bigint id PK
+    bigint employee_assignment_id FK
+    date month
+    bigint approved_by FK
+    timestamptz approved_at
+    text notes
+    jsonb snapshot
+  }
+  employee_assignments {
+    bigint id PK
+  }
+  employees {
+    bigint id PK
+  }
+  timetable_periods {
+    bigint id PK
+  }

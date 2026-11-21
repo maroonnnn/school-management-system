@@ -1,0 +1,43 @@
+erDiagram
+  term_results ||--o{ result_corrections : result_id
+  teaching_assignments ||--o{ result_sheets : teaching_assignment_id
+  student_enrollments ||--o{ term_results : enrollment_id
+  result_sheets ||--o{ term_results : sheet_id
+  result_sheets {
+    bigint id PK
+    bigint teaching_assignment_id FK
+    smallint term
+    varchar status
+    bigint submitted_by FK
+    timestamptz submitted_at
+  }
+  term_results {
+    bigint id PK
+    bigint sheet_id FK
+    bigint enrollment_id FK
+    numeric score
+  }
+  result_corrections {
+    bigint id PK
+    bigint result_id FK
+    numeric old_score
+    numeric new_score
+    text reason
+    bigint corrected_by FK
+    timestamptz corrected_at
+  }
+  audit_logs {
+    bigint id PK
+    bigint user_id FK
+    varchar action
+    varchar entity_type
+    varchar entity_id
+    jsonb details
+    varchar ip_address
+  }
+  student_enrollments {
+    bigint id PK
+  }
+  teaching_assignments {
+    bigint id PK
+  }

@@ -1,0 +1,15 @@
+flowchart LR
+  TEA(["Teacher"])
+  SUP(["Supervisor"])
+  STF(["Administrative<br/>staff"])
+  subgraph SYS["Teachers, supervisors, staff"]
+    U13["Enter and submit<br/>term results"]
+    U15["View own schedule,<br/>quota and attendance"]
+    U16["Check in by face"]
+    U14["Review and correct<br/>term results"]
+  end
+  TEA --- U13
+  TEA --- U15
+  TEA --- U16
+  SUP --- U14
+  STF --- U16

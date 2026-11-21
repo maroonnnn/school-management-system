@@ -1,0 +1,23 @@
+flowchart LR
+  MIN(["Ministry<br/>administrator"])
+  DIR(["Directorate<br/>administrator"])
+  subgraph SYS["Ministry and directorate"]
+    U1["View indicators<br/>and school ranking"]
+    U2["Review attendance<br/>anomaly alerts"]
+    U3["Send circulars and<br/>track delivery"]
+    U12["Export reports<br/>(Excel and PDF)"]
+    U4["Review and decide on<br/>school requests"]
+    U5["Create teacher accounts"]
+    U6["Configure quotas,<br/>weights and thresholds"]
+  end
+  MIN --- U1
+  MIN --- U2
+  MIN --- U3
+  MIN --- U12
+  DIR --- U1
+  DIR --- U2
+  DIR --- U3
+  DIR --- U12
+  DIR --- U4
+  DIR --- U5
+  DIR --- U6

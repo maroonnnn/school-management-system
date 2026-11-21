@@ -1,0 +1,12 @@
+flowchart TD
+  A["Classified attendance days<br/>last 7 weeks, per school"] --> B["Remove leave and outage days"]
+  B --> D1["Consecutive absence<br/>teacher absent 3 or more duty days in a row"]
+  B --> D2["School absence spike<br/>weekly rate above mean + 2 sd of the previous 4 weeks,<br/>two weeks in a row (z-score)"]
+  B --> D3["Weekday lateness<br/>late on one weekday, rarely on other days"]
+  B --> D4["Repeated incomplete registration<br/>3 or more days in 4 weeks"]
+  D1 --> E["Alert with severity, plain-language reason,<br/>the numbers that caused it, and the dates"]
+  D2 --> E
+  D3 --> E
+  D4 --> E
+  E --> F["Shown to principal, deputy and directorate.<br/>The ministry sees school-level alerts and counts only."]
+  F --> G(["No automatic administrative action"])
