@@ -148,7 +148,7 @@ python -m venv .venv
 .venv/Scripts/python -m uvicorn app:app --host 127.0.0.1 --port 8001
 ```
 
-تغييرات قاعدة البيانات تُكتب كملفات في `database/migrations/` بالترتيب، وبيانات التجربة تُولَّد بـ `python database/generate_seed.py` (بتاريخ آخر يوم دوام قبل اليوم تلقائياً). لإعادة بناء القاعدة كاملة بنقرة وحدة على Windows: `powershell -File databaseebuild.ps1`.
+تغييرات قاعدة البيانات تُكتب كملفات في `database/migrations/` بالترتيب، وبيانات التجربة تُولَّد بـ `python database/generate_seed.py` (بتاريخ آخر يوم دوام قبل اليوم تلقائياً). لإعادة بناء القاعدة كاملة بنقرة وحدة على Windows: `powershell -File database\rebuild.ps1`.
 
 ---
 
