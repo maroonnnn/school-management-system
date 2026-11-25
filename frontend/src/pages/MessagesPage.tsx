@@ -258,7 +258,7 @@ function MessagesPage() {
 
                       {d.isSender && d.status === "SENT" && (
                         <>
-                          <h3 className="h6 fw-bold">حالة الاستلام <span className="text-secondary small fw-normal">(FR-MSG-10)</span></h3>
+                          <h3 className="h6 fw-bold">حالة الاستلام</h3>
                           <div className="table-responsive">
                             <table className="table table-sm align-middle small mb-0">
                               <thead className="table-light"><tr><th>الجهة</th><th>فُتحت</th>{d.requires_ack && <th>تأكيد الاستلام</th>}</tr></thead>

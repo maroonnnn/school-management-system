@@ -304,11 +304,14 @@ ea_school = {a[0]: a[2] for a in assignments}
 perm_teachers = lambda sid: [a[0] for a in assignments if a[2] == sid and a[3] == "TEACHER" and a[0] not in contract_eas
                               and all(e != a[1] for e, _ in on_leave)]
 ANOM_ABSENT_EA = perm_teachers(1)[1]           # ALG-07: absent 4 duty days in a row (no leave)
-ANOM_ABSENT_DAYS = {TODAY - timedelta(days=k) for k in range(1, 5)}
+ANOM_ABSENT_DAYS = set(work_dates[:4])         # the 4 most recent working days before TODAY
 ANOM_LATE_EA = next(ea for ea in perm_teachers(2) if 1 in lesson_slots.get(ea, {}).get(3, []))  # teaches period 1 on Tuesday (dow 3) → late every Tuesday, last 5 weeks
 ANOM_INC_EA = next(ea for ea, pos in all_staff if pos == "ADMINISTRATIVE" and ea_school[ea] == 4)  # forgets to check out
-ANOM_INC_DAYS = {TODAY - timedelta(days=k) for k in (2, 9, 15)}
-SPIKE_SCHOOL, SPIKE_FROM = 3, TODAY - timedelta(days=TODAY.weekday() + 1 + 7)  # ALG-11: last two weeks (Sun..)
+ANOM_INC_DAYS = {work_dates[1], work_dates[5], work_dates[9]}  # working days spread over ~4 weeks
+# ALG-11: the two most recent COMPLETE working weeks (Sun..Thu) get a high absence rate in one school, whatever TODAY is
+_sunday = TODAY - timedelta(days=(TODAY.weekday() + 1) % 7)
+_last_thursday = _sunday + timedelta(days=4) if TODAY >= _sunday + timedelta(days=4) else _sunday - timedelta(days=3)
+SPIKE_SCHOOL, SPIKE_FROM = 3, _last_thursday - timedelta(days=11)
 
 events = []
 day = YEAR_START
@@ -333,9 +336,12 @@ while day <= TODAY:
                 events.append((ea, "IN", first - timedelta(minutes=random.randint(5, 15) - late_min), "FACE"))
                 events.append((ea, "OUT", last + timedelta(minutes=random.randint(2, 10)), "FACE"))
                 continue
-            late = r < 0.14 or (ea == ANOM_LATE_EA and day.weekday() == 1 and day > TODAY - timedelta(days=35))
+            anom_late = ea == ANOM_LATE_EA and day.weekday() == 1 and day > TODAY - timedelta(days=35)
+            late = r < 0.14 or anom_late
             t_in = datetime.combine(day, datetime.min.time()) + timedelta(
                 hours=7, minutes=random.randint(35, 58) + (random.randint(20, 60) if late else 0))
+            if anom_late:  # always clearly late (25-45 min after the first lesson) so the weekday pattern is detectable
+                t_in = datetime.combine(day, datetime.strptime(PERIODS[min(lesson_slots[ea][3])], "%H:%M").time()) + timedelta(minutes=random.randint(25, 45))
             leave_early = random.random() < 0.05
             # teachers leave after their last lesson (~12:45); admin staff after official hours (13:30)
             out_start = (13 * 60 if pos == "TEACHER" else 13 * 60 + 25) if not leave_early else 11 * 60

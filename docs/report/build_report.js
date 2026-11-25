@@ -63,6 +63,21 @@ function FIG(name, caption, maxH = MAX_IMG_H) {
     children: [run(`${label}  ${caption}`, { bold: true })] }));
   return label;
 }
+/** Screenshot of the running system (2x PNG from take_screenshots.py), numbered like a figure. */
+function SHOT(name, caption, maxH = MAX_IMG_H) {
+  const file = path.join(__dirname, "screenshots", `${name}.png`);
+  const { w, h } = pngSize(file);
+  const nw = w / 2, nh = h / 2;
+  const k = Math.min(MAX_IMG_W / nw, maxH / nh, 1);
+  figN++;
+  const label = `Figure ${chapter}.${figN}`;
+  body.push(new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 120, after: 120 },
+    children: [new ImageRun({ type: "png", data: fs.readFileSync(file), transformation: { width: Math.round(nw * k), height: Math.round(nh * k) },
+      altText: { title: label, description: caption, name } })] }));
+  body.push(new Paragraph({ style: "FigureCaption", alignment: AlignmentType.CENTER, spacing: { after: 360 },
+    children: [run(`${label}  ${caption}`, { bold: true })] }));
+  return label;
+}
 const figLabel = () => `Figure ${chapter}.${figN + 1}`; // label the next FIG() call will produce
 
 const cellBorder = { style: BorderStyle.SINGLE, size: 4, color: "808080" };
@@ -281,7 +296,7 @@ P("The repository contains a Docker Compose configuration that starts the databa
 // ---------------------------------------------------------------- chapter 5
 H1("Results and Testing");
 H2("Testing strategy");
-P("Testing was done at three levels. The algorithms are pure functions and were covered by unit tests. The routes and the business rules were tested through the HTTP interface with scripted scenarios for every role, including the attempts that must be refused. The rules that must hold even if the application is bypassed were tested directly against the database. The face service was exercised end to end through the API, but not with real faces, as explained in Section 5.6.");
+P("Testing was done at three levels. The algorithms are pure functions and were covered by unit tests. The routes and the business rules were tested through the HTTP interface with scripted scenarios for every role, including the attempts that must be refused. The rules that must hold even if the application is bypassed were tested directly against the database. The face service was exercised end to end through the API, but not with real faces, as explained in Section 5.7.");
 H2("Unit tests of the algorithms");
 TBL("Unit tests", [4200, 1400, 3755], ["Component", "Tests", "What is verified"], [
   ["Daily attendance classification", "18", "Every status, tolerance, outages, leave, corrections and incomplete registrations"],
@@ -320,15 +335,31 @@ TBL("Security tests", [3600, 5755], ["Test", "Result"], [
 ]);
 P("All 19 security checks passed. A scan of the code found no query built from user input and no insertion of user text into the page as HTML. A dependency audit reported two moderate findings in a library used by the Excel exporter; they concern a function that the project does not call, and updating would break the exporter, so they were documented and left unchanged.");
 H2("Results of the decision-support components");
-P("On the demonstration data the performance indices of the five schools for October 2026 were between 70 and 76 and the need indices between 9 and 32, which is consistent with data generated with similar parameters for every school. Each school is ranked with an explanation of the factors that lowered its performance or raised its need, and a school that lacks a factor is ranked using the remaining factors with a note, as verified by the unit tests.");
+P("On the demonstration data the performance indices of the five schools for October 2026 were between 66 and 74 and the need indices between 12 and 55, which is consistent with data generated with similar parameters for every school. Each school is ranked with an explanation of the factors that lowered its performance or raised its need, and a school that lacks a factor is ranked using the remaining factors with a note, as verified by the unit tests.");
 P("The anomaly detector found all four patterns that were deliberately inserted into the data: a school whose absence rate rose for two weeks, a teacher who was absent for four consecutive days, a teacher who arrived late every Tuesday, and an administrative employee who regularly forgot to check out. It also reported a few patterns that arose by chance from the random data, such as a teacher who happened to be late on several Thursdays, which illustrates both the sensitivity of the rules and the need for a human review of every alert.");
+H2("Screenshots of the main screens");
+P("The screens below were captured from the running system with the demonstration data. The interface is in Arabic and is displayed from right to left, as required by its users. Each user sees only the screens and the data that belong to the role of that user.");
+P(`${figLabel()} shows the login page, which is the only screen available before authentication. After login, the dashboard of a directorate administrator, shown in Figure ${chapter}.${figN + 2} and Figure ${chapter}.${figN + 3}, gives the indicators of the selected period and a comparison of the schools; the period and the school can be changed with the filters above the indicators, and the same figures are available as an exported report.`);
+SHOT("01_login", "Login page", 330);
+SHOT("02_dashboard", "Directorate dashboard for the previous month: indicators and daily attendance trend");
+SHOT("03_dashboard_schools", "Dashboard comparison of the schools of the directorate");
+P(`The attendance page of a school principal, ${figLabel()}, lists every employee for the chosen day with the expected hours, the first entry, the last exit and the automatic classification with its reason. A day without any movement appears as a possible absence that needs a review, because the system never declares an absence by itself. The monthly report of a teacher, ${`Figure ${chapter}.${figN + 2}`}, summarises the attendance, the lessons and the quota of the month and contains the approval panel that lists the pending cases.`);
+SHOT("04_attendance", "Daily attendance page of a school with the automatic classification");
+SHOT("05_teacher_report", "Monthly report of a teacher with the approval panel");
+P(`The page of school requests of the directorate, ${figLabel()}, orders the requests by the priority score and displays, for the selected request, the sentence that explains the score together with the history of the request. The page of intelligent analytics shows the attendance alerts in ${`Figure ${chapter}.${figN + 2}`}, each with its severity and a link to the numbers that caused it, and the ranking of the schools in ${`Figure ${chapter}.${figN + 3}`} with the contribution of every factor for the selected school.`);
+SHOT("06_request_priority", "School requests ordered by priority, with the explanation of the selected request");
+SHOT("07_alerts", "Attendance anomaly alerts");
+SHOT("08_school_ranking", "School performance and need indices with the explanation of one school");
+P(`${figLabel()} shows the term results submitted by a teacher as the supervisor sees them: the pencil icon marks a result that was corrected, and the log under the table records the old value, the new value, the reason and the author. Finally, ${`Figure ${chapter}.${figN + 2}`} shows the delivery status of a ministry circular, with the time at which each school opened it and the person who opened it.`);
+SHOT("09_term_results", "Term results submitted by a teacher, as seen by the supervisor, with a correction in the log");
+SHOT("10_messages", "Delivery status of a ministry circular");
 H2("Limitations of the tests");
 B([
   "The face-recognition path was verified through the interfaces but not with real faces and a real camera, because no camera was available on the development machine. The threshold of 0.42 comes from the characteristics of the model and has not been calibrated with the false accept and false reject rates measured on volunteers.",
   "The Docker configuration was prepared but could not be executed because Docker was not installed on the development machine.",
   "All data is generated; no real personal data was used.",
 ]);
-TODO("Insert screenshots of the main screens here (login, dashboard, attendance page, monthly report, school requests, insights page) as figures with captions, and add the results of testing face recognition with a real camera when available.");
+TODO("Add the results of testing face recognition with a real camera (accuracy at several thresholds) when available, and screenshots of the face enrolment and kiosk screens.");
 
 // ---------------------------------------------------------------- chapter 6
 H1("Evaluation");
