@@ -1,0 +1,17 @@
+{
+  "name": "نظام إدارة ومتابعة المدارس — جهاز الحضور",
+  "short_name": "حضور المدارس",
+  "description": "تسجيل الحضور بالوجه، ويعمل دون اتصال بالإنترنت ثم يزامن عند عودته.",
+  "start_url": "/kiosk",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "ar",
+  "dir": "rtl",
+  "background_color": "#0b3b2e",
+  "theme_color": "#0b3b2e",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

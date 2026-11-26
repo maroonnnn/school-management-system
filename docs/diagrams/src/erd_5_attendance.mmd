@@ -2,6 +2,9 @@ erDiagram
   employee_assignments ||--o{ attendance_corrections : employee_assignment_id
   employee_assignments ||--o{ attendance_events : employee_assignment_id
   employees ||--o{ face_embeddings : employee_id
+  attendance_events |o--o{ offline_captures : event_id
+  employee_assignments |o--o{ offline_captures : matched_assignment_id
+  schools ||--o{ offline_captures : school_id
   schools ||--o{ power_outages : school_id
   attendance_events {
     bigint id PK
@@ -42,6 +45,19 @@ erDiagram
     text notes
     bigint recorded_by FK
     timestamptz recorded_at
+  }
+  offline_captures {
+    bigint id PK
+    bigint school_id FK
+    bigint kiosk_user_id FK
+    uuid client_event_id
+    text challenge_nonce
+    jsonb challenge
+    timestamptz captured_at
+    timestamptz device_captured_at
+    bigint matched_assignment_id FK
+    bigint event_id FK
+    bigint resolved_by FK
   }
   employee_assignments {
     bigint id PK

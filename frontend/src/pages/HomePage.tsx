@@ -25,6 +25,7 @@ const ATTENTION: Record<string, { label: string; icon: string; to: string }> = {
   results_not_submitted: { label: "محصّلات الفصل الحالي لم تُرفع بعد", icon: "bi-journal-check", to: "/grades" },
   results_submitted_recent: { label: "محصّلات رُفعت خلال أسبوعين", icon: "bi-journal-check", to: "/grades" },
   my_requests_open: { label: "طلبات المدرسة المفتوحة", icon: "bi-send", to: "/requests" },
+  offline_review: { label: "لقطات حضور (دون اتصال) بحاجة مراجعتك", icon: "bi-camera-video", to: "/attendance?tab=offline" },
   attendance_alerts: { label: "تنبيهات أنماط حضور غير طبيعية", icon: "bi-activity", to: "/insights" },
   on_leave_today: { label: "موظفون في إجازة اليوم", icon: "bi-calendar-x", to: "/quota" },
 };

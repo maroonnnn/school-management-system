@@ -1,7 +1,7 @@
 flowchart LR
   subgraph CLIENT["Client"]
     direction TB
-    SPA["Web application<br/>React 19, TypeScript,<br/>Bootstrap 5 (RTL)"]
+    SPA["Web application (installable)<br/>React 19, TypeScript, Bootstrap 5 (RTL)<br/>service worker and IndexedDB<br/>for the offline kiosk"]
     CAM["Browser camera<br/>(attendance kiosk)"]
     CAM --> SPA
   end
@@ -15,7 +15,7 @@ flowchart LR
   end
   subgraph STORE["Data"]
     direction TB
-    DB[("PostgreSQL<br/>39 tables, triggers, views")]
+    DB[("PostgreSQL<br/>40 tables, triggers, views")]
     FS[("File storage<br/>request and message<br/>attachments")]
   end
   FACE["Face service<br/>Python, FastAPI<br/>OpenCV YuNet and SFace"]

@@ -134,7 +134,7 @@ front.push(
   frontHeading("Abstract"),
   fp("Ministries and local directorates supervise many schools, yet the information needed to do so, such as attendance, teaching load and pending needs, is usually collected on paper and arrives late and inconsistently. This project designed and implemented a central web system that connects a ministry, its directorates and their schools, in which every user sees only the data within the user's own scope."),
   fp("The system records staff attendance, optionally by face recognition with a liveness check, and classifies each working day automatically with a plain-language reason. It tracks the weekly teaching quota of permanent and contract teachers, manages school requests with an explainable priority score, delivers circulars with tracking of opening and acknowledgement, and lets a supervisor correct submitted term results with a logged reason. Reports and dashboards use the same functions, so their figures agree, and results can be exported to Excel or printed to PDF in Arabic. Two local and transparent statistical components rank schools and detect unusual attendance patterns, and no automated administrative action is ever taken."),
-  fp("The system uses Node.js, PostgreSQL, React and a separate Python face service, and critical rules, such as the immutability of raw attendance events, sent messages and submitted results, are enforced by database triggers. It was verified with 51 unit tests and more than 250 API and database test cases. Offline attendance and the calibration of the face-matching threshold remain future work."),
+  fp("The system uses Node.js, PostgreSQL, React and a separate Python face service, and critical rules, such as the immutability of raw attendance events, sent messages and submitted results, are enforced by database triggers. The attendance kiosk keeps working when the internet connection is lost: it stores encrypted captures on the device and the server verifies them after synchronisation. The system was verified with 61 unit tests and more than 290 API and database test cases. The calibration of the face-matching threshold with real volunteers remains future work."),
   new Paragraph({ pageBreakBefore: true, spacing: { after: 240 }, children: [run("Contents", { bold: true, size: 28 })] }),
   new TableOfContents("Contents", { hyperlink: true, headingStyleRange: "1-2" }),
   new Paragraph({ pageBreakBefore: true, spacing: { after: 240 }, children: [run("List of Figures", { bold: true, size: 28 })] }),
@@ -165,7 +165,7 @@ B([
   "supports decisions with transparent statistics, namely a school performance index and the detection of unusual attendance patterns, without taking any automatic action.",
 ]);
 H2("Scope and limitations");
-P("The system was developed and demonstrated with generated data for one ministry, one directorate and five schools, as no real personal data was used. Payroll is outside the scope: for contract teachers the system only displays an indicative estimate of the payment for executed lessons. Attendance when the internet connection is unavailable was designed but not implemented, and the face-matching threshold was set from the published characteristics of the model and not yet calibrated with a group of volunteers.");
+P("The system was developed and demonstrated with generated data for one ministry, one directorate and five schools, as no real personal data was used. Payroll is outside the scope: for contract teachers the system only displays an indicative estimate of the payment for executed lessons. Attendance without an internet connection is supported by the installable kiosk, but it was tested with a stand-in face service and not with a real camera, and the face-matching threshold was set from the published characteristics of the model and not yet calibrated with a group of volunteers.");
 H2("Organisation of the report");
 P("Chapter 2 presents the background: the structure of the education system that the project serves, attendance technologies, the security techniques that are used, and the idea of explainable decision support. Chapter 3 describes the stakeholders, the requirements and the design of the architecture, the database and the security. Chapter 4 explains how each module was implemented. Chapter 5 reports the testing and the results. Chapter 6 evaluates the work against the objectives, and Chapter 7 concludes and suggests future work. The appendices list the configurable parameters, the database tables and the organisation of the source code.");
 
@@ -182,7 +182,8 @@ P("The system relies on established techniques. Role-based access control assign
 H2("Explainable decision support");
 P("Decision-support tools in public administration face a trust problem: managers are reluctant to act on a score they cannot understand, and an unexplained automatic decision about a person is unacceptable. The approach adopted here is therefore to use simple statistical methods whose result can be explained in a sentence, for example comparing a weekly absence rate with the mean and standard deviation of the previous weeks (a z-score), and to show the numbers behind every result. The methods run locally, need no internet connection or external model, and are used only to draw attention, never to decide.");
 H2("Related work");
-TODO("Review at least four existing school-management or attendance systems (for example commercial school information systems and published research projects), state what each offers, and explain how this project differs. Cite each source in the reference list.");
+P("Remote identity verification systems face the same two problems that the attendance kiosk faces: deciding whether a live person is in front of the camera, and deciding whether the face matches an enrolled one. The international standard ISO/IEC 30107-3 defines how presentation attacks, such as a photograph or a replayed video shown to the camera, are tested and reported, with the error rates APCER (attacks accepted as genuine), BPCER (genuine users rejected) and their average. Active liveness checks, which ask the user to perform an action such as turning the head, are stronger than passive checks on a single image, because the action is unpredictable. A recent graduation project on electronic identity verification, which studied liveness metrics, motivated the two-direction head-turn used here. In contrast with such systems, which assume a permanent connection, the attendance kiosk must also work during power or network outages, which led to the capture-now, verify-later design of Section 4.5.");
+TODO("Review at least three existing school-management or attendance systems (commercial school information systems or published research projects), state what each offers and how this project differs; cite the standard and the identity-verification graduation project (confirm the author name and permission) in the reference list.");
 H2("The proposed solution");
 P("The proposed solution is a central web application with a single database, in which the same business functions serve the screens, the reports and the dashboards. A separate face service performs the image processing. The next chapter describes the requirements and the design in detail.");
 
@@ -235,7 +236,7 @@ TBL("Main technologies", [2600, 6755], ["Layer", "Technology"], [
   ["Deployment", "Docker Compose with an nginx front end (prepared; see Chapter 6)"],
 ]);
 H2("Database design");
-P(`The database contains 39 tables. To keep the diagrams readable they are presented in nine parts, ${figLabel()} to Figure ${chapter}.${figN + 9}, in the order in which they appear below. Foreign keys that point to the users table from author columns, such as created_by or decided_by, are kept as attributes but their lines are omitted. Entities drawn with only an identifier are shown for context and are described in another part.`);
+P(`The database contains 40 tables. To keep the diagrams readable they are presented in nine parts, ${figLabel()} to Figure ${chapter}.${figN + 9}, in the order in which they appear below. Foreign keys that point to the users table from author columns, such as created_by or decided_by, are kept as attributes but their lines are omitted. Entities drawn with only an identifier are shown for context and are described in another part.`);
 FIG("erd_1_organisation", "Entity-relationship diagram, part 1: ministry, directorates, schools and accounts");
 FIG("erd_2_staff", "Entity-relationship diagram, part 2: employees and assignments");
 FIG("erd_3_classes_students", "Entity-relationship diagram, part 3: classes, sections and students");
@@ -265,8 +266,12 @@ FIG("fig_day_classification", "Flowchart of the daily attendance classification"
 H3("Corrections, outages and export");
 P("A deputy or the principal may propose a correction to the status of a day, and the principal approves it. A correction proposed by the principal is approved by the directorate, so that nobody approves a correction made by the same person. Power outages are recorded with a start and an end of at most 24 hours, and the directorate can see the number of outages of every school. A monthly Excel file of the daily attendance and of the raw events is generated on demand from the accepted events, which guarantees that the file is always an up-to-date copy of the records.");
 H2("Face recognition");
-P(`Face recognition is split between the application server and the face service, as shown in ${figLabel()}. The kiosk first requests a challenge: a random head-turn direction, returned inside a signed token that lasts 90 seconds and is bound to the kiosk user. The kiosk then captures three frontal frames and five frames during the head turn and sends them with the token. The face service checks that exactly one face is present, that it belongs to the same person in all frames, and that the head turn occurred, and returns a 128-value embedding. The images are held in memory only and are discarded immediately.`);
+P(`Face recognition is split between the application server and the face service, as shown in ${figLabel()}. The kiosk first requests a challenge: a random sequence of two opposite head turns, for example right and then left, returned inside a signed token that lasts 90 seconds and is bound to the kiosk user. The kiosk then captures three frontal frames and four frames during each turn, eleven in all, and sends them with the token. The face service estimates the horizontal head rotation of every frame from the position of the nose relative to the eyes, and requires a frontal pose, a rotation of at least 0.22 eye distances in the requested direction for each step, and the requested order. A single-direction clip or a still photograph therefore fails. It also checks that exactly one face is present and that it belongs to the same person in all frames, and returns a 128-value embedding. The images are held in memory only and are discarded immediately.`);
 FIG("fig_face_sequence", "Sequence diagram of face check-in");
+H2("Attendance without an internet connection");
+P(`A school cannot always rely on the network, so the kiosk page is an installable web application. A service worker keeps the application shell in the browser cache, and the kiosk session is restored after a restart even when the device is offline. The server cannot issue liveness challenges while offline, so the kiosk downloads a pool of signed single-use challenges while it is connected, valid for 72 hours. When there is no connection, a capture is made with a challenge from the pool, encrypted with AES-GCM using a non-extractable key held by the browser, and stored in the local database of the browser together with a client event identifier. No face matching is performed on the device, so no face vectors are stored there. ${figLabel()} shows the whole cycle.`);
+FIG("fig_offline_sync", "Offline attendance: preparation, capture without internet and synchronisation");
+P("When the connection returns, the kiosk sends the queued captures in small batches, sorted by capture time. The server rejects a replayed capture through the client identifier and a challenge that was used before, verifies the signature of the challenge and that the capture lies inside its validity window, measures the difference between the device clock and the server clock, and then runs the same liveness and matching steps as the online path. A capture that passes is stored as an attendance event with its original capture time. A capture that fails, or whose clock difference exceeds ten minutes, is kept encrypted for review by the principal, who attaches it to an employee or rejects it with a reason; the images are deleted as soon as the decision is taken, or after seven days. The event type, entry or exit, is derived from the order of the movements, so a late synchronisation still produces a consistent day.");
 P("The application server decrypts the embeddings of the staff of the same school, computes the cosine similarity with each, and accepts the best match when it exceeds a single threshold taken from the settings (0.42 by default). The event type, entry or exit, follows the last movement of the person on that day, and the match score is stored with the event. Embeddings are encrypted with AES-256-GCM using a key that is kept outside the database and are never written to the audit log. Only the principal of a school can enrol the face of a staff member of that school.");
 H2("School requests");
 P(`A request is created by the school as a draft and then follows the life cycle in ${figLabel()}. The directorate can start a review, return the request for clarification, approve it or reject it with a mandatory reason, and then mark it in progress and completed. Only the school can close a completed request, so that the school confirms that the problem was solved. Attachments of up to 4 MB in a limited set of types and comments are supported, and each change of status creates a notification for the other party.`);
@@ -304,7 +309,8 @@ TBL("Unit tests", [4200, 1400, 3755], ["Component", "Tests", "What is verified"]
   ["School performance and need index", "7", "Bounds, missing data, ranking and ties, custom weights"],
   ["Attendance anomaly detection", "12", "Consecutive absence, z-score rule and its guards, weekday lateness, incomplete registrations"],
   ["Face vector encryption and similarity", "4", "Encryption round trip, tampering and similarity"],
-  ["Total", "51", "All tests pass"],
+  ["Liveness evaluation (face service)", "10", "Order of the two turns, one-way clip, missing frontal pose, direction sign"],
+  ["Total", "61", "All tests pass"],
 ]);
 H2("Functional and database tests");
 P("Scripted scenarios were executed against a freshly built database after each module was completed. They check that every role receives exactly the data of its scope, that forbidden actions return the appropriate error, and that the database refuses the operations that the triggers forbid.");
@@ -315,6 +321,7 @@ TBL("Scripted API and database test campaigns", [3500, 1300, 4555], ["Module", "
   ["Timetables and quota", "27", "Lesson status, weekly summary, leave and corrections"],
   ["Attendance", "36 + 9", "Raw event protection, corrections and approval, outages, Excel file"],
   ["Face recognition", "12", "Permissions, challenge token, round trip to the face service"],
+  ["Attendance without an internet connection", "38", "Challenge pool, idempotent synchronisation, replay and clock-drift rules, review queue, deletion of frames"],
   ["School requests", "54", "Transitions, mandatory reasons, attachments, notifications, teacher account request"],
   ["Messages and circulars", "28 + 5", "Routing rules, immutability after sending, delivery tracking"],
   ["Term results", "25", "Entry, submission, correction with reason, notification, database guards"],
@@ -355,7 +362,7 @@ SHOT("09_term_results", "Term results submitted by a teacher, as seen by the sup
 SHOT("10_messages", "Delivery status of a ministry circular");
 H2("Limitations of the tests");
 B([
-  "The face-recognition path was verified through the interfaces but not with real faces and a real camera, because no camera was available on the development machine. The threshold of 0.42 comes from the characteristics of the model and has not been calibrated with the false accept and false reject rates measured on volunteers.",
+  "The face-recognition path, including the offline synchronisation, was verified through the interfaces and with a stand-in face service, but not with real faces and a real camera, because no camera was available on the development machine. The threshold of 0.42 comes from the characteristics of the model and has not been calibrated with the false accept and false reject rates measured on volunteers.",
   "The Docker configuration was prepared but could not be executed because Docker was not installed on the development machine.",
   "All data is generated; no real personal data was used.",
 ]);
@@ -374,13 +381,13 @@ TBL("Objectives compared with the outcome", [4100, 1500, 3755], ["Objective", "S
   ["Term results with controlled corrections", "Achieved", "25 checks including database guards"],
   ["Consistent reports and dashboards with export", "Achieved", "Dashboard output equals the central report; four exports"],
   ["Transparent decision support", "Achieved", "19 unit tests, explanations and evidence in every result"],
-  ["Attendance without an internet connection", "Not implemented", "Designed (Section 7.3) but not built"],
+  ["Attendance without an internet connection", "Achieved", "Installable kiosk, encrypted local queue, synchronisation and review (Section 4.5)"],
   ["Containerised deployment", "Prepared, not executed", "Docker files written; not run"],
 ]);
 H2("Comparison with other systems");
 TODO("Compare the system objectively with the systems reviewed in Section 2.5 (features, privacy approach, explainability, cost). State where this work is stronger and where it is weaker.");
 H2("Strengths and weaknesses");
-P("The main strength of the design is that the rules that protect the data are enforced in the database, and that every figure shown to a user comes from one function, so that screens, reports and exports agree. The explanation attached to every classification, score and alert makes the system suitable for decision support. The main weaknesses are the lack of an offline mode, the absence of an accuracy measurement for face recognition on real people, and the fact that the in-memory limit on login attempts is not shared between several server instances.");
+P("The main strength of the design is that the rules that protect the data are enforced in the database, and that every figure shown to a user comes from one function, so that screens, reports and exports agree. The explanation attached to every classification, score and alert makes the system suitable for decision support. The main weaknesses are that the offline mode needs the challenge pool to be refilled at least every three days while online, that browsers on some phones may evict local storage, the absence of an accuracy measurement for face recognition on real people, and the fact that the in-memory limit on login attempts is not shared between several server instances.");
 
 // ---------------------------------------------------------------- chapter 7
 H1("Conclusion");
@@ -390,7 +397,7 @@ H2("Conclusions");
 P("The project shows that a single system can serve three administrative levels with strict separation of scope, and that simple statistical methods, accompanied by their evidence, are sufficient to draw the attention of managers to the cases that need it. Computing every figure from one source removes the disagreement between reports that motivated the work.");
 H2("Future work");
 B([
-  "Offline attendance: the application could be installed on the kiosk device and store encrypted captures with a client event identifier, to be matched and synchronised when the connection returns, with a PIN fallback and a comparison of the device clock with the server clock.",
+  "Measurement of presentation-attack detection on volunteers with printed photographs and replayed video, reporting APCER, BPCER and their average as defined by ISO/IEC 30107-3, and a passive liveness check as a second layer.",
   "Calibration of the face-matching threshold with 10 to 15 volunteers, publishing the false accept and false reject rates for several thresholds.",
   "Mobile-optimised kiosk and a quick action for recording power outages.",
   "Management of subjects and of the assignment of contract teachers to a second school from the interface.",
@@ -418,7 +425,7 @@ APPENDIX("Database tables by group");
 TBL("Tables of the database", [2700, 6655], ["Group", "Tables"], [
   ["Organisation and accounts (9)", "ministries, directorates, schools, roles, users, employees, employee_assignments, teacher_profiles, school_deputy_authorizations"],
   ["Academic structure and timetables (9)", "academic_years, classes, sections, students, student_enrollments, subjects, teaching_assignments, timetables, timetable_periods"],
-  ["Attendance (4)", "attendance_events, face_embeddings, attendance_corrections, power_outages"],
+  ["Attendance (5)", "attendance_events, face_embeddings, attendance_corrections, power_outages, offline_captures"],
   ["Leave, lessons and reports (3)", "employee_leaves, lesson_executions, report_approvals"],
   ["Requests and communication (9)", "school_requests, request_status_history, request_attachments, request_comments, notifications, notification_reads, messages, message_recipients, message_attachments"],
   ["Results and audit (4)", "result_sheets, term_results, result_corrections, audit_logs"],
@@ -429,7 +436,8 @@ P("The source code is kept in a public repository [TODO: confirm the repository 
 TBL("Folders of the project", [2700, 6655], ["Folder", "Content"], [
   ["backend", "Application server: routes, services, pure algorithms with their tests, middleware"],
   ["frontend", "Web application: pages, shared components, navigation and the theme"],
-  ["face-service", "Python face detection and recognition service"],
+  ["face-service", "Python face detection, liveness evaluation and recognition service"],
+  ["tests", "Integration test for offline synchronisation and a stand-in face service"],
   ["database", "Schema, default settings, migrations, the demonstration data generator and the rebuild script"],
   ["docs", "Report figures with their sources and build script, and the discussion scenario"],
 ]);

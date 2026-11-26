@@ -5,7 +5,8 @@ import pool from "../config/database.js";
 import { AuthRequest, authenticateToken, requireRole } from "../middleware/auth.middleware.js";
 import { resolveReadableSchool } from "../services/scope.service.js";
 import { audit } from "../services/audit.service.js";
-import { encryptVector, findBestMatch, processFrames } from "../services/face.service.js";
+import { encryptVector, findBestMatch, isChallenge, layoutFor, processFrames, randomChallenge } from "../services/face.service.js";
+import { listReview, loadFrames, processOfflineCapture, resolveCapture, type IncomingCapture } from "../services/offlineAttendance.service.js";
 import { HttpError, handle, requireId } from "../utils/http.js";
 
 // FR-ATT-01..05, 22, 24 — enrollment by the principal, check-in kiosk at the school
@@ -15,20 +16,36 @@ router.use(authenticateToken);
 const KIOSK = requireRole("SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY", "SCHOOL_STAFF");
 
 // ---------------------------------------------------------------- liveness challenge (FR-ATT-22)
-// The server picks the head-turn direction and signs it, so a client cannot choose or replay it.
+// The server picks an ordered two-step head-turn sequence (e.g. RIGHT then LEFT) and signs it, so a client cannot
+// choose or replay it. Online: valid 90 s. Offline pool: valid 72 h, each token backs ONE capture (checked at sync).
+function signChallenge(req: AuthRequest, ttl: string) {
+  const challenge = randomChallenge();
+  const token = jwt.sign({ purpose: "face", challenge, uid: req.user!.id, schoolId: req.user!.schoolId, n: crypto.randomUUID() },
+    process.env.JWT_SECRET!, { expiresIn: ttl as jwt.SignOptions["expiresIn"], algorithm: "HS256" });
+  return { challenge, layout: layoutFor(challenge), token };
+}
+
 router.get(
   "/challenge",
   handle<AuthRequest>(async (req, res) => {
-    const challenge = crypto.randomInt(2) === 0 ? "LEFT" : "RIGHT";
-    const token = jwt.sign({ purpose: "face", challenge, uid: req.user!.id, n: crypto.randomUUID() }, process.env.JWT_SECRET!, { expiresIn: "90s", algorithm: "HS256" });
-    res.json({ success: true, data: { challenge, token } });
+    res.json({ success: true, data: signChallenge(req, "90s") });
   })
 );
 
-function readChallenge(req: AuthRequest): string {
+// Offline pool for the kiosk: fetched while online, used while the internet is down
+router.get(
+  "/challenges",
+  KIOSK,
+  handle<AuthRequest>(async (req, res) => {
+    const count = Math.min(Math.max(Number(req.query.count) || 100, 1), 200);
+    res.json({ success: true, data: Array.from({ length: count }, () => signChallenge(req, "72h")) });
+  })
+);
+
+function readChallenge(req: AuthRequest): string[] {
   try {
-    const p = jwt.verify(String(req.body?.challengeToken ?? ""), process.env.JWT_SECRET!, { algorithms: ["HS256"] }) as { purpose: string; challenge: string; uid: number };
-    if (p.purpose !== "face" || p.uid !== req.user!.id) throw new Error();
+    const p = jwt.verify(String(req.body?.challengeToken ?? ""), process.env.JWT_SECRET!, { algorithms: ["HS256"] }) as { purpose: string; challenge: unknown; uid: number };
+    if (p.purpose !== "face" || p.uid !== req.user!.id || !isChallenge(p.challenge)) throw new Error();
     return p.challenge;
   } catch {
     throw new HttpError(400, "انتهت صلاحية التحدي — أعد المحاولة");
@@ -146,6 +163,60 @@ router.post(
         duplicate,
       },
     });
+  })
+);
+
+// ---------------------------------------------------------------- offline attendance: sync + review queue (ATT-21)
+// The kiosk sends the captures it stored while the internet was down (max 5 per call, oldest first).
+router.post(
+  "/sync",
+  KIOSK,
+  handle<AuthRequest>(async (req, res) => {
+    const list = req.body?.captures as IncomingCapture[] | undefined;
+    const deviceNow = Date.parse(String(req.body?.deviceNow ?? ""));
+    if (!Array.isArray(list) || list.length < 1 || list.length > 5) throw new HttpError(400, "أرسل من 1 إلى 5 لقطات في الطلب الواحد");
+    if (Number.isNaN(deviceNow)) throw new HttpError(400, "وقت الجهاز غير صالح");
+    const skewSeconds = Math.round((Date.now() - deviceNow) / 1000); // server time − device time (clock drift)
+    const sorted = [...list].sort((a, b) => Date.parse(a?.capturedAt) - Date.parse(b?.capturedAt));
+    const results = [];
+    for (const c of sorted) results.push(await processOfflineCapture(req.user!, c, skewSeconds));
+    const accepted = results.filter((r) => r.status === "ACCEPTED").length;
+    void audit({ userId: req.user!.id, action: "DATA_CREATE", entityType: "offline_sync", entityId: req.user!.schoolId!,
+      details: { received: results.length, accepted, needsReview: results.filter((r) => r.status === "NEEDS_REVIEW").length, skewSeconds }, req });
+    res.json({ success: true, data: { skewSeconds, results } });
+  })
+);
+
+const PRINCIPAL = requireRole("SCHOOL_PRINCIPAL");
+
+router.get(
+  "/offline/review",
+  PRINCIPAL,
+  handle<AuthRequest>(async (req, res) => {
+    res.json({ success: true, data: await listReview(req.user!.schoolId!) });
+  })
+);
+
+router.get(
+  "/offline/:id/preview",
+  PRINCIPAL,
+  handle<AuthRequest>(async (req, res) => {
+    const id = requireId(req.params.id);
+    const frames = await loadFrames(req.user!.schoolId!, id);
+    void audit({ userId: req.user!.id, action: "FACE_CAPTURE_VIEW", entityType: "offline_capture", entityId: id, req });
+    // the first frame is the frontal one (the person looking at the camera)
+    res.json({ success: true, data: { image: frames[0] } });
+  })
+);
+
+router.post(
+  "/offline/:id/resolve",
+  PRINCIPAL,
+  handle<AuthRequest>(async (req, res) => {
+    const id = requireId(req.params.id);
+    const out = await resolveCapture(req.user!, id, req.body ?? {});
+    void audit({ userId: req.user!.id, action: "DATA_UPDATE", entityType: "offline_capture", entityId: id, details: { decision: out.status }, req });
+    res.json({ success: true, message: out.status === "RESOLVED" ? "تم اعتماد الحركة وتسجيلها" : "تم رفض اللقطة وحذفها", data: out });
   })
 );
 

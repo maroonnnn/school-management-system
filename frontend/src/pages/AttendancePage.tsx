@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApi } from "../hooks/useApi";
 import { ApiError, API_BASE, apiFetch, getToken } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Alert, Field, Loading, PageHeader, SchoolPicker } from "../components/ui";
+import OfflineReview from "../components/OfflineReview";
 import { todayIso } from "../utils/schedule";
 import { CORRECTED_STATUS, CORRECTION_STATE, DAY_STATUS, POSITION_LABELS } from "../config/labels";
 
@@ -28,7 +30,7 @@ export interface DayRow {
 }
 interface RawEvent {
   id: number; event_type: string; event_time: string; received_at: string; verification_method: string;
-  verification_status: string; match_score: string | null; manual_reason: string | null; recorded_by_name: string | null;
+  verification_status: string; match_score: string | null; manual_reason: string | null; recorded_by_name: string | null; device_label: string | null;
 }
 interface Correction {
   id: number; work_date: string; corrected_status: string; reason: string; status: string; proposed_at: string;
@@ -38,7 +40,7 @@ interface Correction {
 interface Outage { id: number; outage_type: string; starts_at: string; ends_at: string; minutes: number; notes: string | null; recorded_by_name: string }
 interface OutageSummary { id: number; name: string; outages: number; hours: number }
 
-type Tab = "daily" | "corrections" | "outages" | "excel";
+type Tab = "daily" | "corrections" | "outages" | "offline" | "excel";
 const METHOD: Record<string, string> = { FACE: "وجه", MANUAL: "يدوي", FINGERPRINT: "بصمة" };
 
 export function StatusBadge({ row }: { row: Pick<DayRow, "status" | "correctedStatus" | "pendingCorrection"> }) {
@@ -58,7 +60,8 @@ function AttendancePage() {
   const isPrincipal = user?.role === "SCHOOL_PRINCIPAL";
   const isSchool = isPrincipal || user?.role === "SCHOOL_DEPUTY";
   const isDirectorate = user?.role === "DIRECTORATE_ADMIN";
-  const [tab, setTab] = useState<Tab>("daily");
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(params.get("tab") === "offline" && isPrincipal ? "offline" : "daily");
   const [schoolId, setSchoolId] = useState<number | null>(user?.schoolId ?? null);
   const [date, setDate] = useState(todayIso());
   const [filter, setFilter] = useState("ALL");
@@ -118,7 +121,7 @@ function AttendancePage() {
       <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
         <SchoolPicker value={schoolId} onChange={(id) => { setSchoolId(id); setOpenId(null); }} />
         <ul className="nav nav-pills">
-          {([["daily", "اليومي"], ["corrections", "التصحيحات"], ["outages", "الانقطاعات"], ...(isPrincipal ? [["excel", "ملف Excel"]] : [])] as [Tab, string][]).map(([k, label]) => (
+          {([["daily", "اليومي"], ["corrections", "التصحيحات"], ["outages", "الانقطاعات"], ...(isPrincipal ? [["offline", "لقطات دون اتصال"], ["excel", "ملف Excel"]] : [])] as [Tab, string][]).map(([k, label]) => (
             <li className="nav-item" key={k}>
               <button className={`nav-link ${tab === k ? "active" : ""}`} onClick={() => { setTab(k); setOpenId(null); }}>{label}</button>
             </li>
@@ -192,7 +195,7 @@ function AttendancePage() {
                             <td>{e.event_type === "IN" ? "دخول" : "خروج"}</td>
                             <td>{e.event_time}</td>
                             <td className="text-secondary">{e.received_at.slice(11)}</td>
-                            <td>{METHOD[e.verification_method] ?? e.verification_method}{e.manual_reason && <div className="text-secondary" title={e.manual_reason}>{e.recorded_by_name}: {e.manual_reason}</div>}</td>
+                            <td>{METHOD[e.verification_method] ?? e.verification_method}{e.device_label?.includes("offline") && <span className="badge text-bg-warning me-1" title="سُجّلت دون اتصال وزُوِّمنت لاحقاً">دون اتصال</span>}{e.manual_reason && <div className="text-secondary" title={e.manual_reason}>{e.recorded_by_name}: {e.manual_reason}</div>}</td>
                             <td>{e.match_score ? `${Math.round(Number(e.match_score) * 100)}%` : "—"}</td>
                           </tr>
                         ))}
@@ -342,6 +345,8 @@ function AttendancePage() {
       )}
 
       {/* ------------------------------------------------ excel */}
+      {tab === "offline" && isPrincipal && <OfflineReview />}
+
       {tab === "excel" && isPrincipal && (
         <div className="card border-0 shadow-sm rounded-4" style={{ maxWidth: 640 }}>
           <div className="card-body">

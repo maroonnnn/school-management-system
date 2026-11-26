@@ -1,7 +1,7 @@
 """
 Face service — FR-ATT-01..05, FR-ATT-22, NFR-07
 Stateless HTTP service (localhost only) used by the Node backend:
-  POST /process  {frames: [base64 JPEG], challenge: "LEFT"|"RIGHT"}  →  embedding + liveness result
+  POST /process  {frames: [base64 JPEG], challenge: ["RIGHT","LEFT"], layout: [3,4,4]}  →  embedding + liveness result
 Images are decoded in memory, never written to disk, and dropped when the request ends (NFR-07).
 Models: OpenCV Zoo YuNet (detection + 5 landmarks) and SFace (128-d embedding).
 Run:  face-service/.venv/Scripts/python -m uvicorn app:app --host 127.0.0.1 --port 8001   (from face-service/)
@@ -15,15 +15,16 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from liveness import FRONTAL_MAX, evaluate_liveness, parse_challenge, split_groups
+
 MODELS = Path(__file__).parent / "models"
 DETECTOR_PATH = MODELS / "face_detection_yunet_2023mar.onnx"
 RECOGNIZER_PATH = MODELS / "face_recognition_sface_2021dec.onnx"
 
-# Liveness thresholds on normalised yaw = (nose_x − eyes_mid_x) / eye_distance
-FRONTAL_MAX = 0.12      # a frame counts as "facing the camera"
-TURN_MIN = 0.22         # a frame counts as "head turned"
-# The camera image is not mirrored: when a person turns to THEIR left, the nose moves to the image's right (yaw > 0).
-STRICT_DIRECTION = os.getenv("FACE_STRICT_DIRECTION", "0") == "1"
+# Liveness: see liveness.py. The direction is now STRICT by default (the turn must be the requested one);
+# set FACE_STRICT_DIRECTION=0 to accept any direction, FACE_YAW_SIGN=-1 if a real camera shows the opposite sign.
+STRICT_DIRECTION = os.getenv("FACE_STRICT_DIRECTION", "1") == "1"
+YAW_SIGN = -1 if os.getenv("FACE_YAW_SIGN", "1") == "-1" else 1
 SAME_PERSON_MIN = 0.40  # all analysed frames must belong to the same person (anti face-swap)
 
 app = FastAPI(title="School face service", docs_url=None, redoc_url=None)
@@ -32,8 +33,12 @@ recognizer = cv2.FaceRecognizerSF.create(str(RECOGNIZER_PATH), "")
 
 
 class ProcessRequest(BaseModel):
-    frames: list[str] = Field(min_length=1, max_length=12)
-    challenge: str | None = None  # LEFT / RIGHT; None = no liveness check (not allowed by the backend)
+    frames: list[str] = Field(min_length=1, max_length=20)
+    # Ordered head-turn directions, e.g. ["RIGHT", "LEFT"] (a single "LEFT"/"RIGHT" is still accepted).
+    # None = no liveness check (the backend never allows that).
+    challenge: str | list[str] | None = None
+    # Frames per phase: [frontal, turn 1, turn 2...]. Default: 3 frontal frames, the rest is the (single) turn.
+    layout: list[int] | None = None
 
 
 def decode(b64: str) -> np.ndarray:
@@ -89,21 +94,25 @@ def process(req: ProcessRequest):
     if len(good) < max(2, len(results) // 2):
         return {"ok": False, "reason": "NO_FACE", "message": "لم يُكتشف الوجه بوضوح — اقترب من الكاميرا وتأكد من الإضاءة"}
 
-    yaws = [r["yaw"] for r in good]
+    try:
+        steps = parse_challenge(req.challenge)
+    except ValueError:
+        raise HTTPException(400, "تحدٍّ غير صالح")
+    layout = req.layout or ([min(3, len(results) - 1), len(results) - min(3, len(results) - 1)] if steps else [len(results)])
+    if sum(layout) != len(results):
+        raise HTTPException(400, "ترتيب اللقطات غير مطابق لعددها")
     frontal = [r for r in good if abs(r["yaw"]) <= FRONTAL_MAX]
+    yaws = [r["yaw"] for r in good]
     if not frontal:
         return {"ok": False, "reason": "NO_FRONTAL", "message": "انظر مباشرة إلى الكاميرا في بداية التسجيل", "yaws": yaws}
 
-    # FR-ATT-22: liveness — the head must actually turn during the capture
-    liveness = {"challenge": req.challenge, "passed": req.challenge is None, "maxYaw": max(yaws), "minYaw": min(yaws)}
-    if req.challenge in ("LEFT", "RIGHT"):
-        turned = [y for y in yaws if abs(y) >= TURN_MIN]
-        if STRICT_DIRECTION:
-            want = 1 if req.challenge == "LEFT" else -1
-            turned = [y for y in turned if y * want > 0]
-        liveness["passed"] = len(turned) > 0
-    if not liveness["passed"]:
-        return {"ok": False, "reason": "LIVENESS_FAILED", "message": "لم يتم التحقق من الحيوية — حرّك رأسك كما هو مطلوب", "liveness": liveness}
+    # FR-ATT-22: liveness — the head must turn in the requested directions, in the requested order
+    per_frame = [r["yaw"] if r["faces"] == 1 else None for r in results]
+    live = evaluate_liveness(split_groups(per_frame, layout), steps, strict=STRICT_DIRECTION, yaw_sign=YAW_SIGN)
+    liveness = {"challenge": steps, "passed": live["passed"], "maxYaw": max(yaws), "minYaw": min(yaws), **live["detail"]}
+    if not live["passed"]:
+        return {"ok": False, "reason": live["reason"],
+                "message": live["message"], "liveness": liveness}
 
     # All frames must be the same person (prevents swapping a photo in mid-capture)
     best = max(frontal, key=lambda r: (r["score"], r["size"]))

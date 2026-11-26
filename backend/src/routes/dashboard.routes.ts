@@ -110,6 +110,9 @@ router.get(
           JOIN classes c ON c.id = sc.class_id
           LEFT JOIN result_sheets rs ON rs.teaching_assignment_id = ta.id AND rs.term = $2
           WHERE c.school_id = $1 AND ta.is_active AND rs.status IS DISTINCT FROM 'SUBMITTED'`, [u.schoolId, currentTerm()]);
+      if (u.role === "SCHOOL_PRINCIPAL") {
+        await q("offline_review", `SELECT COUNT(*) n FROM offline_captures WHERE school_id = $1 AND status = 'NEEDS_REVIEW'`, [u.schoolId]);
+      }
       await q("my_requests_open",
         `SELECT COUNT(*) n FROM school_requests WHERE school_id = $1 AND status IN ('SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'IN_PROGRESS', 'COMPLETED')`, [u.schoolId]);
     }

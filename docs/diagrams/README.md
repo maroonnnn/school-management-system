@@ -15,12 +15,13 @@ All figures are in English for the project report. Each one is available as PNG 
 | `erd_2_staff` | Entity-relationship diagram, part 2: employees and assignments | Design (database) |
 | `erd_3_classes_students` | Entity-relationship diagram, part 3: classes, sections and students | Design (database) |
 | `erd_4_teaching_timetables` | Entity-relationship diagram, part 4: subjects, teaching assignments and timetables | Design (database) |
-| `erd_5_attendance` | Entity-relationship diagram, part 5: attendance, face vectors, corrections and outages | Design (database) |
+| `erd_5_attendance` | Entity-relationship diagram, part 5: attendance, face vectors, corrections, outages and offline captures | Design (database) |
 | `erd_6_leave_lessons_reports` | Entity-relationship diagram, part 6: leave, lesson corrections and report approvals | Design (database) |
 | `erd_7_requests` | Entity-relationship diagram, part 7: school requests | Design (database) |
 | `erd_8_messages_notifications` | Entity-relationship diagram, part 8: messages and notifications | Design (database) |
 | `erd_9_results_audit` | Entity-relationship diagram, part 9: term results and audit log | Design (database) |
 | `fig_face_sequence` | Sequence diagram of face check-in | Design |
+| `fig_offline_sync` | Offline attendance: preparation, capture without internet and synchronisation | Design |
 | `fig_request_states` | State diagram of a school request | Design |
 | `fig_results_workflow` | Term results workflow | Design |
 | `fig_day_classification` | Flowchart of the daily attendance classification | Algorithms |

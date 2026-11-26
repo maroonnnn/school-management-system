@@ -1,0 +1,27 @@
+sequenceDiagram
+  participant K as Kiosk (installed web application)
+  participant I as Device storage (IndexedDB)
+  participant A as API (Express)
+  participant F as Face service (Python)
+  participant D as PostgreSQL
+  Note over K,A: Before the outage (online)
+  K->>A: GET /face/challenges (150 signed challenges, valid 72 h)
+  A-->>K: signed two-step challenges
+  K->>I: store the challenge pool and the kiosk session
+  Note over K,I: During the outage (no internet)
+  K->>K: capture 11 frames with a pooled challenge
+  K->>I: store the capture encrypted (AES-GCM) with its original time
+  K-->>K: saved, it will be verified when the connection returns
+  Note over K,D: When the connection returns
+  K->>A: POST /face/sync (up to 5 captures, device time)
+  A->>A: check signature, validity window, single use, clock drift
+  A->>F: POST /process (frames, challenge, layout)
+  F-->>A: embedding and liveness result
+  A->>D: match with the encrypted vectors of this school
+  alt verified and no flag
+    A->>D: insert the attendance event with the original capture time
+  else doubtful
+    A->>D: keep the capture encrypted for the principal's review
+  end
+  A-->>K: result for each capture
+  K->>I: delete the synced captures

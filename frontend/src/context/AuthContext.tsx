@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthUser } from "../types/auth";
 import { apiFetch, getToken, setToken, setUnauthorizedHandler } from "../services/api";
+import { clearKioskSession, restoreKioskSession } from "../services/offlineQueue";
 
 const USER_KEY = "sms.user";
 const IDLE_LIMIT_MS = 30 * 60 * 1000; // FR-AUTH-02
@@ -26,8 +27,23 @@ function loadUser(): AuthUser | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(loadUser);
   const [logoutReason, setLogoutReason] = useState<string | null>(null);
+  // Offline restart of the kiosk device: the stored kiosk session is restored (online it is never used: the token expires in 30 min)
+  const [restoring, setRestoring] = useState(() => !loadUser() && navigator.onLine === false);
+
+  useEffect(() => {
+    if (!restoring) return;
+    void restoreKioskSession().then((s) => {
+      if (s) {
+        setToken(s.token);
+        try { sessionStorage.setItem(USER_KEY, JSON.stringify(s.user)); } catch { /* ignore */ }
+        setUser(s.user);
+      }
+      setRestoring(false);
+    });
+  }, [restoring]);
 
   const logout = useCallback((reason?: string) => {
+    void clearKioskSession();
     setToken(null);
     try {
       sessionStorage.removeItem(USER_KEY);
@@ -65,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     let timer = window.setTimeout(fire, IDLE_LIMIT_MS);
     function fire() {
+      // the attendance kiosk stays signed in (an idle kiosk is normal; the server token expires by itself)
+      if (window.location.pathname.startsWith("/kiosk")) { reset(); return; }
       logout("تم إنهاء الجلسة تلقائياً بعد 30 دقيقة من عدم النشاط");
     }
     function reset() {
@@ -80,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, logout]);
 
   const value = useMemo(() => ({ user, login, logout, logoutReason }), [user, login, logout, logoutReason]);
+  if (restoring) return null;
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

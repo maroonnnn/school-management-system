@@ -1,19 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../services/api";
+import type { ChallengeInfo } from "../services/offlineQueue";
 
 /**
- * Camera capture with a server-issued head-turn challenge (FR-ATT-03, FR-ATT-22).
- * Frames exist only in memory and are sent once; nothing is stored in the browser (NFR-07).
- * Sequence: look at the camera (3 frames) → turn head as asked (5 frames).
+ * Camera capture with a server-issued liveness challenge (FR-ATT-03, FR-ATT-22).
+ * The challenge is an ordered two-step head turn (e.g. right, then left): 3 frontal frames, then 4 frames per turn.
+ * Frames exist only in memory until they are sent (or stored encrypted by the kiosk while offline); nothing else is kept (NFR-07).
  */
-export interface Capture { frames: string[]; challengeToken: string }
+export interface Capture { frames: string[]; challengeToken: string; source: "server" | "pool" }
 
 const FRONT_FRAMES = 3;
-const TURN_FRAMES = 5;
-const FRAME_GAP_MS = 220;
+const TURN_FRAMES = 4;
+const FRONT_GAP_MS = 220;
+const TURN_GAP_MS = 350;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export default function FaceCapture({ onCapture, busy, actionLabel }: { onCapture: (c: Capture) => Promise<void> | void; busy?: boolean; actionLabel: string }) {
+/** Default: ask the server (online). The kiosk passes its own provider that falls back to the offline pool. */
+async function serverChallenge(): Promise<ChallengeInfo> {
+  const { data } = await apiFetch<{ data: { challenge: ChallengeInfo["challenge"]; layout: number[]; token: string } }>("/face/challenge");
+  return { ...data, source: "server" };
+}
+
+export default function FaceCapture({ onCapture, busy, actionLabel, getChallenge = serverChallenge, note }: {
+  onCapture: (c: Capture) => Promise<void> | void;
+  busy?: boolean;
+  actionLabel: string;
+  getChallenge?: () => Promise<ChallengeInfo>;
+  note?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   // No camera API at all (e.g. page opened over plain http on another host) — known at first render
@@ -36,11 +50,11 @@ export default function FaceCapture({ onCapture, busy, actionLabel }: { onCaptur
       })
       .catch((e: DOMException) => {
         const byName: Record<string, string> = {
-          NotAllowedError: "تم رفض إذن الكاميرا — اسمح بها من رمز القفل/الكاميرا بجانب عنوان الصفحة، أو من إعدادات خصوصية Windows",
+          NotAllowedError: "تم رفض إذن الكاميرا — اسمح بها من رمز القفل/الكاميرا بجانب عنوان الصفحة، أو من إعدادات الخصوصية",
           NotFoundError: "لا توجد كاميرا متصلة بالجهاز",
           NotReadableError: "الكاميرا مستخدمة من برنامج آخر (Zoom، Teams، تطبيق الكاميرا...) — أغلقه وأعد المحاولة",
           OverconstrainedError: "الكاميرا لا تدعم الدقة المطلوبة",
-          SecurityError: "المتصفح يمنع الكاميرا لهذه الصفحة — افتح النظام عبر http://localhost:5173",
+          SecurityError: "المتصفح يمنع الكاميرا لهذه الصفحة — افتح النظام عبر https أو http://localhost",
         };
         setError(`تعذّر تشغيل الكاميرا: ${byName[e?.name] ?? e?.message ?? "خطأ غير معروف"} (${e?.name ?? "?"})`);
       });
@@ -53,27 +67,30 @@ export default function FaceCapture({ onCapture, busy, actionLabel }: { onCaptur
   function grab(): string {
     const v = videoRef.current!;
     const canvas = document.createElement("canvas");
-    const scale = Math.min(1, 640 / (v.videoWidth || 640));
-    canvas.width = Math.round((v.videoWidth || 640) * scale);
-    canvas.height = Math.round((v.videoHeight || 480) * scale);
+    const scale = Math.min(1, 480 / (v.videoWidth || 480)); // small frames: faster to send and light to keep offline
+    canvas.width = Math.round((v.videoWidth || 480) * scale);
+    canvas.height = Math.round((v.videoHeight || 360) * scale);
     canvas.getContext("2d")!.drawImage(v, 0, 0, canvas.width, canvas.height); // un-mirrored frame
-    return canvas.toDataURL("image/jpeg", 0.85);
+    return canvas.toDataURL("image/jpeg", 0.72);
   }
 
   async function start() {
     setError("");
     setCapturing(true);
     try {
-      const { data } = await apiFetch<{ data: { challenge: "LEFT" | "RIGHT"; token: string } }>("/face/challenge");
+      const ch = await getChallenge();
       const frames: string[] = [];
       setPrompt("انظر مباشرة إلى الكاميرا...");
       await sleep(700);
-      for (let i = 0; i < FRONT_FRAMES; i++) { frames.push(grab()); await sleep(FRAME_GAP_MS); }
-      setPrompt(data.challenge === "LEFT" ? "⬅ لُفّ رأسك ببطء إلى يسارك" : "لُفّ رأسك ببطء إلى يمينك ➡");
-      await sleep(600);
-      for (let i = 0; i < TURN_FRAMES; i++) { frames.push(grab()); await sleep(FRAME_GAP_MS); }
-      setPrompt("جارٍ التحقق...");
-      await onCapture({ frames, challengeToken: data.token });
+      for (let i = 0; i < FRONT_FRAMES; i++) { frames.push(grab()); await sleep(FRONT_GAP_MS); }
+      for (let step = 0; step < ch.challenge.length; step++) {
+        const dir = ch.challenge[step];
+        setPrompt(`${ch.challenge.length > 1 ? `(${step + 1} من ${ch.challenge.length}) ` : ""}${dir === "LEFT" ? "⬅ لُفّ رأسك ببطء إلى يسارك" : "لُفّ رأسك ببطء إلى يمينك ➡"}`);
+        await sleep(500);
+        for (let i = 0; i < TURN_FRAMES; i++) { frames.push(grab()); await sleep(TURN_GAP_MS); }
+      }
+      setPrompt("جارٍ المعالجة...");
+      await onCapture({ frames, challengeToken: ch.token, source: ch.source });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -91,11 +108,11 @@ export default function FaceCapture({ onCapture, busy, actionLabel }: { onCaptur
         {!ready && !error && <div className="face-prompt">جارٍ تشغيل الكاميرا...</div>}
       </div>
       {error && <div className="alert alert-danger py-2 mt-2">{error}</div>}
-      <button className="btn btn-primary btn-lg w-100 mt-3" disabled={!ready || capturing || busy} onClick={start}>
+      <button className="btn btn-primary btn-lg w-100 mt-3 face-action" disabled={!ready || capturing || busy} onClick={start}>
         {capturing || busy ? <><span className="spinner-border spinner-border-sm ms-2"></span>انتظر...</> : actionLabel}
       </button>
       <p className="small text-secondary text-center mt-2 mb-0">
-        <i className="bi bi-shield-lock ms-1"></i>لا تُحفظ أي صورة — يُحفظ رقم مشفّر فقط.
+        <i className="bi bi-shield-lock ms-1"></i>{note ?? "لا تُحفظ أي صورة — يُحفظ رقم مشفّر فقط."}
       </p>
     </div>
   );

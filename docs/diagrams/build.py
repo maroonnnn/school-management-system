@@ -27,7 +27,7 @@ ERD_PARTS = [
     ("erd_2_staff", ["employees", "employee_assignments", "teacher_profiles", "school_deputy_authorizations"]),
     ("erd_3_classes_students", ["academic_years", "classes", "sections", "students", "student_enrollments"]),
     ("erd_4_teaching_timetables", ["subjects", "teaching_assignments", "timetables", "timetable_periods"]),
-    ("erd_5_attendance", ["attendance_events", "face_embeddings", "attendance_corrections", "power_outages"]),
+    ("erd_5_attendance", ["attendance_events", "face_embeddings", "attendance_corrections", "power_outages", "offline_captures"]),
     ("erd_6_leave_lessons_reports", ["employee_leaves", "lesson_executions", "report_approvals"]),
     ("erd_7_requests", ["school_requests", "request_status_history", "request_attachments", "request_comments"]),
     ("erd_8_messages_notifications", ["messages", "message_recipients", "message_attachments", "notifications",

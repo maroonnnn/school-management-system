@@ -44,10 +44,28 @@ export interface FaceResult {
   model?: string;
 }
 
+/** Liveness challenge = ordered head-turn directions; the capture layout follows from it (server-defined, not client-chosen). */
+export const FRAMES_FRONT = 3;
+export const FRAMES_PER_TURN = 4;
+export type Direction = "LEFT" | "RIGHT";
+export const layoutFor = (steps: string[]) => [FRAMES_FRONT, ...steps.map(() => FRAMES_PER_TURN)];
+
+/** Random two-step challenge: a random first direction, then the opposite one (a one-way recorded clip cannot pass). */
+export function randomChallenge(): Direction[] {
+  const first: Direction = crypto.randomInt(2) === 0 ? "LEFT" : "RIGHT";
+  return [first, first === "LEFT" ? "RIGHT" : "LEFT"];
+}
+
+export function isChallenge(v: unknown): v is Direction[] {
+  return Array.isArray(v) && v.length >= 1 && v.length <= 3 && v.every((d) => d === "LEFT" || d === "RIGHT");
+}
+
 /** Sends camera frames to the local Python service (it keeps nothing). */
-export async function processFrames(frames: unknown, challenge: string): Promise<FaceResult> {
-  if (!Array.isArray(frames) || frames.length < 3 || frames.length > 12 || frames.some((f) => typeof f !== "string" || f.length > 600_000)) {
-    throw new HttpError(400, "يجب إرسال من 3 إلى 12 لقطة من الكاميرا");
+export async function processFrames(frames: unknown, steps: string[]): Promise<FaceResult> {
+  const layout = layoutFor(steps);
+  const expected = layout.reduce((a, b) => a + b, 0);
+  if (!Array.isArray(frames) || frames.length !== expected || frames.some((f) => typeof f !== "string" || f.length > 600_000)) {
+    throw new HttpError(400, `يجب إرسال ${expected} لقطة بالترتيب المطلوب`);
   }
   const url = process.env.FACE_SERVICE_URL ?? "http://127.0.0.1:8001";
   let res: Response;
@@ -55,14 +73,26 @@ export async function processFrames(frames: unknown, challenge: string): Promise
     res = await fetch(`${url}/process`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frames, challenge }),
-      signal: AbortSignal.timeout(20_000),
+      body: JSON.stringify({ frames, challenge: steps, layout }),
+      signal: AbortSignal.timeout(30_000),
     });
   } catch {
     throw new HttpError(503, "خدمة التعرّف على الوجه غير متاحة حالياً — استخدم الإدخال اليدوي");
   }
   if (!res.ok) throw new HttpError(502, "خطأ في خدمة التعرّف على الوجه");
   return (await res.json()) as FaceResult;
+}
+
+/** AES-256-GCM for the temporarily stored offline frames (same key as the face vectors). */
+export function encryptBlob(plain: Buffer) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key(), iv);
+  return { data: Buffer.concat([cipher.update(plain), cipher.final()]), iv, tag: cipher.getAuthTag() };
+}
+export function decryptBlob(data: Buffer, iv: Buffer, tag: Buffer): Buffer {
+  const d = crypto.createDecipheriv("aes-256-gcm", key(), iv);
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(data), d.final()]);
 }
 
 export async function matchThreshold(): Promise<number> {
