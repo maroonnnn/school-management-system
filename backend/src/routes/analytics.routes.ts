@@ -12,9 +12,10 @@ const router = Router();
 router.use(authenticateToken);
 const READERS = requireRole("MINISTRY_ADMIN", "DIRECTORATE_ADMIN", "SCHOOL_PRINCIPAL", "SCHOOL_DEPUTY");
 
+// The performance index and ranking are a supervision tool: directorate and ministry only (schools do not see it).
 router.get(
   "/performance",
-  READERS,
+  requireRole("MINISTRY_ADMIN", "DIRECTORATE_ADMIN"),
   handle<AuthRequest>(async (req, res) => {
     const u = req.user!;
     const range = monthRange(parseMonth(req.query.month));

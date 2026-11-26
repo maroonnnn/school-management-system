@@ -181,16 +181,18 @@ function AlertsTab() {
 }
 
 function InsightsPage() {
+  const { user } = useAuth();
+  const isSchoolRole = user?.role === "SCHOOL_PRINCIPAL" || user?.role === "SCHOOL_DEPUTY";
   const [tab, setTab] = useState<"perf" | "alerts">("alerts");
   return (
     <div className="container-fluid p-3 p-lg-4">
-      <PageHeader title="التحليلات الذكية" subtitle="مؤشر أداء المدارس وترتيبها، وكشف الأنماط غير الطبيعية في الحضور" />
+      <PageHeader title="التحليلات الذكية" subtitle={isSchoolRole ? "كشف الأنماط غير الطبيعية في الحضور" : "مؤشر أداء المدارس وترتيبها، وكشف الأنماط غير الطبيعية في الحضور"} />
       <Disclaimer />
       <ul className="nav nav-tabs mb-3">
         <li className="nav-item"><button type="button" className={`nav-link ${tab === "alerts" ? "active" : ""}`} onClick={() => setTab("alerts")}><i className="bi bi-activity ms-1"></i>تنبيهات الحضور</button></li>
-        <li className="nav-item"><button type="button" className={`nav-link ${tab === "perf" ? "active" : ""}`} onClick={() => setTab("perf")}><i className="bi bi-trophy ms-1"></i>مؤشر أداء المدارس</button></li>
+        {!isSchoolRole && <li className="nav-item"><button type="button" className={`nav-link ${tab === "perf" ? "active" : ""}`} onClick={() => setTab("perf")}><i className="bi bi-trophy ms-1"></i>مؤشر أداء المدارس</button></li>}
       </ul>
-      {tab === "alerts" ? <AlertsTab /> : <PerformanceTab />}
+      {tab === "alerts" || isSchoolRole ? <AlertsTab /> : <PerformanceTab />}
     </div>
   );
 }
