@@ -5,3 +5,5 @@ dist/
 
 # Word lock files
 ~$*
+docs/demo/raw/
+docs/demo/demo.mp4
