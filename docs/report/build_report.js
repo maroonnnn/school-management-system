@@ -107,21 +107,42 @@ function TBL(caption, widths, header, rows) {
 }
 
 // ---------------------------------------------------------------- front matter
-const AUTHOR = "[Author full name]";
-const DEGREE = "[Degree, e.g. Bachelor of Engineering in Informatics Engineering]";
+const AUTHOR = "Abdalrhmn Boubes, Lilas Dasoki";
+const DEGREE = "Bachelor of Software Engineering";
 const front = [];
 const center = (text, o = {}) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 240 }, children: runs(text, o) });
+const noBorder = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
+const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
+const logoFile = path.join(__dirname, "university_logo.png");
 front.push(
-  new Paragraph({ spacing: { before: 2400 }, children: [] }),
-  center("A Central System for Managing and Monitoring Schools", { bold: true, size: 40 }),
+  new Table({
+    width: { size: 9355, type: WidthType.DXA }, columnWidths: [6355, 3000],
+    borders: { ...noBorders, insideHorizontal: noBorder, insideVertical: noBorder },
+    rows: [new TableRow({ children: [
+      new TableCell({ width: { size: 6355, type: WidthType.DXA }, borders: noBorders, children: [
+        new Paragraph({ spacing: { after: 120 }, children: runs("Yarmouk Private University", { size: 24 }) }),
+        new Paragraph({ spacing: { after: 120 }, children: runs("Faculty of Informatics and Communication Engineering", { size: 24 }) }),
+        new Paragraph({ spacing: { after: 120 }, children: runs("Department of Software Engineering", { size: 24 }) }),
+      ] }),
+      new TableCell({ width: { size: 3000, type: WidthType.DXA }, borders: noBorders, children: [
+        new Paragraph({ alignment: AlignmentType.RIGHT, children: [new ImageRun({ type: "png", data: fs.readFileSync(logoFile), transformation: { width: 150, height: 112 },
+          altText: { title: "University logo", description: "Yarmouk Private University logo", name: "logo" } })] }),
+      ] }),
+    ] })],
+  }),
+  new Paragraph({ spacing: { before: 1500 }, children: [] }),
+  center("A Central System for Managing and Monitoring Schools", { bold: true, size: 44 }),
   center("A Role-Based Web Platform for Attendance, Teaching Quota, Requests and Decision Support", { size: 28 }),
-  new Paragraph({ spacing: { before: 1800 }, children: [] }),
-  center(AUTHOR, { bold: true, size: 28 }),
-  center(`A project report submitted in partial fulfilment of the requirements for the degree of ${DEGREE}`),
-  center("[TODO: university, faculty and department]"),
-  center("[TODO: supervisor name and title]"),
-  center("[TODO: industrial or other collaboration, if any; otherwise delete this line]"),
-  new Paragraph({ spacing: { before: 1800 }, children: [] }),
+  center("Graduation Project Report", { size: 30 }),
+  new Paragraph({ spacing: { before: 600 }, children: [] }),
+  center("Prepared By:", { bold: true, size: 32 }),
+  center("Abdalrhmn Boubes", { size: 28 }),
+  center("Lilas Dasoki", { size: 28 }),
+  new Paragraph({ spacing: { before: 400 }, children: [] }),
+  center("Supervised By:", { bold: true, size: 32 }),
+  center("Dr. Mostafa Dakak", { size: 28 }),
+  center("Eng. Faris Dadosh", { size: 28 }),
+  new Paragraph({ spacing: { before: 600 }, children: [] }),
   center("December 2026", { size: 28 }),
 );
 
